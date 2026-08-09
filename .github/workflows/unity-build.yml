@@ -16,7 +16,7 @@ jobs:
 
   build-windows:
     name: Build Windows
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
 
@@ -147,7 +147,7 @@ jobs:
 
   build-macos:
     name: Build macOS
-    runs-on: macos-latest
+    runs-on: self-hosted
 
     steps:
 
@@ -249,7 +249,7 @@ jobs:
       - build-windows
       - build-macos
 
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
 
