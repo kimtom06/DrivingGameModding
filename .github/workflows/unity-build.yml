@@ -10,29 +10,62 @@ permissions:
 
 jobs:
 
-  # ============================================
+  # ============================================================
   # WINDOWS BUILD
-  # ============================================
+  # ============================================================
 
   build-windows:
     name: Build Windows
     runs-on: ubuntu-latest
 
     steps:
+
+      # ----------------------------------------------------------
+      # Free GitHub Runner Disk Space
+      # Unity Docker image is very large.
+      # ----------------------------------------------------------
+
+      - name: Check disk space before cleanup
+        run: |
+          echo "===== BEFORE CLEANUP ====="
+          df -h
+
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # Windows Unity build runs inside Docker,
+          # so these preinstalled GitHub runner tools are not needed.
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Check disk space after cleanup
+        run: |
+          echo "===== AFTER CLEANUP ====="
+          df -h
+
+      # ----------------------------------------------------------
+      # Checkout
+      # ----------------------------------------------------------
+
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           lfs: true
 
-      - name: Cache Unity Library
-        uses: actions/cache@v4
-        with:
-          path: Library
-          key: Library-Windows-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-          restore-keys: |
-            Library-Windows-
-            Library-
+      - name: Check disk space after checkout
+        run: |
+          echo "===== AFTER CHECKOUT ====="
+          df -h
+
+      # ----------------------------------------------------------
+      # Unity Windows Build
+      # ----------------------------------------------------------
 
       - name: Build Windows
         uses: game-ci/unity-builder@v5
@@ -40,50 +73,101 @@ jobs:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+
         with:
           targetPlatform: StandaloneWindows64
           buildName: ModdingEditor
           buildsPath: build
 
+          # Use the git tag as the Unity application version.
+          # v2.0.1 -> 2.0.1
+          versioning: Tag
+
+      # ----------------------------------------------------------
+      # Debug build output
+      # ----------------------------------------------------------
+
       - name: Show Windows build files
         run: |
-          find build -maxdepth 3 -type f
+          echo "===== WINDOWS BUILD OUTPUT ====="
+          find build -maxdepth 5 -print
+          echo ""
+          echo "===== DISK AFTER UNITY BUILD ====="
+          df -h
+
+      # ----------------------------------------------------------
+      # Find EXE and ZIP the entire Unity Windows build
+      # ----------------------------------------------------------
 
       - name: Create Windows ZIP
+        shell: bash
         run: |
-          cd build
-          zip -r ../ModdingEditor-Windows.zip StandaloneWindows64
+          EXE_PATH=$(find build -type f -name "ModdingEditor.exe" -print -quit)
 
-      - name: Upload Windows build
-        uses: actions/upload-artifact@v4
+          if [ -z "$EXE_PATH" ]; then
+            echo "ERROR: ModdingEditor.exe was not found."
+            echo ""
+            echo "Build contents:"
+            find build -maxdepth 6 -print
+            exit 1
+          fi
+
+          echo "Found Windows executable:"
+          echo "$EXE_PATH"
+
+          BUILD_DIR=$(dirname "$EXE_PATH")
+
+          echo "Windows build directory:"
+          echo "$BUILD_DIR"
+
+          cd "$BUILD_DIR"
+
+          zip -r "$GITHUB_WORKSPACE/ModdingEditor-Windows.zip" .
+
+          cd "$GITHUB_WORKSPACE"
+
+          echo "Created:"
+          ls -lh ModdingEditor-Windows.zip
+
+      # ----------------------------------------------------------
+      # Store Windows build for Release job
+      # ----------------------------------------------------------
+
+      - name: Upload Windows build artifact
+        uses: actions/upload-artifact@v7
         with:
           name: ModdingEditor-Windows
           path: ModdingEditor-Windows.zip
+          if-no-files-found: error
 
 
-  # ============================================
-  # MAC BUILD
-  # ============================================
+  # ============================================================
+  # MACOS BUILD
+  # ============================================================
 
   build-macos:
     name: Build macOS
     runs-on: macos-latest
 
     steps:
+
+      # ----------------------------------------------------------
+      # Checkout
+      # ----------------------------------------------------------
+
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           lfs: true
 
-      - name: Cache Unity Library
-        uses: actions/cache@v4
-        with:
-          path: Library
-          key: Library-macOS-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-          restore-keys: |
-            Library-macOS-
-            Library-
+      - name: Check macOS disk space
+        run: |
+          df -h
+
+      # ----------------------------------------------------------
+      # Unity macOS Build
+      # ----------------------------------------------------------
 
       - name: Build macOS
         uses: game-ci/unity-builder@v5
@@ -91,43 +175,72 @@ jobs:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+
         with:
           targetPlatform: StandaloneOSX
           buildName: ModdingEditor
           buildsPath: build
+
+          versioning: Tag
+
+          # Cache Unity itself on macOS.
           cacheUnityInstallationOnMac: true
+
+      # ----------------------------------------------------------
+      # Debug build output
+      # ----------------------------------------------------------
 
       - name: Show macOS build files
         run: |
-          find build -maxdepth 4 -print
+          echo "===== MACOS BUILD OUTPUT ====="
+          find build -maxdepth 6 -print
+
+      # ----------------------------------------------------------
+      # Find .app and ZIP while preserving macOS attributes
+      # ----------------------------------------------------------
 
       - name: Create macOS ZIP
+        shell: bash
         run: |
           APP_PATH=$(find build -type d -name "ModdingEditor.app" -print -quit)
 
           if [ -z "$APP_PATH" ]; then
-            echo "ModdingEditor.app was not found!"
+            echo "ERROR: ModdingEditor.app was not found."
+            echo ""
+            echo "Build contents:"
+            find build -maxdepth 6 -print
             exit 1
           fi
 
-          echo "Found app at: $APP_PATH"
+          echo "Found macOS application:"
+          echo "$APP_PATH"
 
-          ditto -c -k \
+          ditto \
+            -c \
+            -k \
             --sequesterRsrc \
             --keepParent \
             "$APP_PATH" \
-            ModdingEditor-macOS.zip
+            "$GITHUB_WORKSPACE/ModdingEditor-macOS.zip"
 
-      - name: Upload macOS build
-        uses: actions/upload-artifact@v4
+          echo "Created:"
+          ls -lh ModdingEditor-macOS.zip
+
+      # ----------------------------------------------------------
+      # Store macOS build for Release job
+      # ----------------------------------------------------------
+
+      - name: Upload macOS build artifact
+        uses: actions/upload-artifact@v7
         with:
           name: ModdingEditor-macOS
           path: ModdingEditor-macOS.zip
+          if-no-files-found: error
 
 
-  # ============================================
-  # GITHUB RELEASE
-  # ============================================
+  # ============================================================
+  # CREATE GITHUB RELEASE
+  # ============================================================
 
   create-release:
     name: Create GitHub Release
@@ -139,34 +252,87 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      # ----------------------------------------------------------
+      # Download artifacts generated by Windows + macOS jobs
+      # ----------------------------------------------------------
+
       - name: Download builds
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: release
 
-      - name: Show downloaded files
+      - name: Show downloaded release files
         run: |
-          find release -type f
+          echo "===== RELEASE FILES ====="
+          find release -type f -print
+
+      # ----------------------------------------------------------
+      # Validate files
+      # ----------------------------------------------------------
+
+      - name: Validate release files
+        shell: bash
+        run: |
+          WINDOWS_FILE="release/ModdingEditor-Windows/ModdingEditor-Windows.zip"
+          MAC_FILE="release/ModdingEditor-macOS/ModdingEditor-macOS.zip"
+
+          if [ ! -f "$WINDOWS_FILE" ]; then
+            echo "ERROR: Windows release ZIP not found."
+            exit 1
+          fi
+
+          if [ ! -f "$MAC_FILE" ]; then
+            echo "ERROR: macOS release ZIP not found."
+            exit 1
+          fi
+
+          echo "Both release files exist:"
+          ls -lh "$WINDOWS_FILE"
+          ls -lh "$MAC_FILE"
+
+      # ----------------------------------------------------------
+      # Create Release if necessary and upload builds
+      # ----------------------------------------------------------
 
       - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+
+        shell: bash
         run: |
           TAG="${{ github.ref_name }}"
+
+          WINDOWS_FILE="release/ModdingEditor-Windows/ModdingEditor-Windows.zip"
+          MAC_FILE="release/ModdingEditor-macOS/ModdingEditor-macOS.zip"
+
+          echo "Creating release for:"
+          echo "$TAG"
 
           if gh release view "$TAG" \
             --repo "${{ github.repository }}" > /dev/null 2>&1
           then
-            echo "Release $TAG already exists"
+
+            echo "Release $TAG already exists."
+
           else
+
+            echo "Creating new Release $TAG..."
+
             gh release create "$TAG" \
               --repo "${{ github.repository }}" \
               --title "Modding Editor $TAG" \
               --generate-notes
+
           fi
 
+          echo "Uploading Windows and macOS builds..."
+
           gh release upload "$TAG" \
-            release/ModdingEditor-Windows/ModdingEditor-Windows.zip \
-            release/ModdingEditor-macOS/ModdingEditor-macOS.zip \
+            "$WINDOWS_FILE" \
+            "$MAC_FILE" \
             --repo "${{ github.repository }}" \
             --clobber
+
+          echo ""
+          echo "Release upload completed."
