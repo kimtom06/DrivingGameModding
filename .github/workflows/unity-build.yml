@@ -9,25 +9,23 @@ permissions:
   contents: write
 
 jobs:
-
   build-release:
     name: Build Windows + macOS
-
     runs-on:
       - self-hosted
       - macOS
 
     steps:
 
-      # ==========================================================
-      # CHECK RUNNER USER
-      # ==========================================================
+      # ============================================================
+      # PREPARE SELF-HOSTED MAC
+      # ============================================================
 
-      - name: Check runner
+      - name: Prepare tools
         shell: bash
         run: |
           echo "======================================"
-          echo "SELF HOSTED MAC"
+          echo "PREPARING SELF-HOSTED MAC"
           echo "======================================"
 
           echo "User:"
@@ -45,70 +43,97 @@ jobs:
           echo "Architecture:"
           echo "$RUNNER_ARCH"
 
+          # --------------------------------------------------------
+          # Do not run Unity as root.
+          # Unity license belongs to your normal macOS user.
+          # --------------------------------------------------------
+
           if [ "$(whoami)" = "root" ]; then
             echo ""
             echo "ERROR:"
             echo "GitHub runner is running as root."
-            echo "Run the runner using the same macOS user that"
-            echo "has Unity Hub and the Unity license activated."
+            echo "Run ./run.sh as your normal macOS user."
             exit 1
           fi
 
+          # --------------------------------------------------------
+          # Homebrew
+          # --------------------------------------------------------
 
-      # ==========================================================
-      # PREPARE HOMEBREW / GIT LFS
-      # ==========================================================
-
-      - name: Prepare Git LFS
-        shell: bash
-        run: |
           if [ -x "/opt/homebrew/bin/brew" ]; then
+
+            # Apple Silicon
+            export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
 
             echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
             echo "/opt/homebrew/sbin" >> "$GITHUB_PATH"
-
-            export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
 
             BREW="/opt/homebrew/bin/brew"
 
           elif [ -x "/usr/local/bin/brew" ]; then
 
+            # Intel Mac
+            export PATH="/usr/local/bin:/usr/local/sbin:$PATH"
+
             echo "/usr/local/bin" >> "$GITHUB_PATH"
             echo "/usr/local/sbin" >> "$GITHUB_PATH"
-
-            export PATH="/usr/local/bin:/usr/local/sbin:$PATH"
 
             BREW="/usr/local/bin/brew"
 
           else
-
             echo "ERROR: Homebrew not found."
             exit 1
-
           fi
 
+          echo ""
+          echo "Homebrew:"
+          "$BREW" --version
+
+          # --------------------------------------------------------
+          # Git LFS
+          # --------------------------------------------------------
+
           if ! command -v git-lfs >/dev/null 2>&1; then
+            echo ""
+            echo "Installing Git LFS..."
             "$BREW" install git-lfs
           fi
 
           git lfs version
-          git lfs install --skip-repo
+
+          # --------------------------------------------------------
+          # GitHub CLI
+          # --------------------------------------------------------
+
+          if ! command -v gh >/dev/null 2>&1; then
+            echo ""
+            echo "Installing GitHub CLI..."
+            "$BREW" install gh
+          fi
+
+          echo ""
+          echo "GitHub CLI:"
+          gh --version
 
 
-      # ==========================================================
+      # ============================================================
       # CHECKOUT
-      # ==========================================================
+      # ============================================================
 
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          lfs: true
+
+          # Keep Library on self-hosted runner.
+          # We manually remove only generated build outputs below.
           clean: false
 
 
-      # ==========================================================
-      # DOWNLOAD LFS FILES
-      # ==========================================================
+      # ============================================================
+      # GIT LFS
+      # ============================================================
 
       - name: Download Git LFS files
         shell: bash
@@ -116,52 +141,239 @@ jobs:
           git lfs install
           git lfs pull
 
+          echo ""
+          echo "Git LFS files:"
+          git lfs ls-files || true
 
-      # ==========================================================
+
+      # ============================================================
+      # REMOVE .DS_STORE FROM UNITY ASSETS
+      # ============================================================
+      #
+      # IMPORTANT:
+      #
+      # This does NOT clean your Mac.
+      #
+      # It ONLY removes Finder .DS_Store files inside:
+      #
+      #   actions-runner/_work/.../Assets/
+      #
+      # This prevents:
+      #
+      # Assets/StreamingAssets/.DS_Store
+      #
+      # from being copied into:
+      #
+      # ModdingEditor.app/.../StreamingAssets/.DS_Store
+      #
+      # and becoming part of the macOS code signature.
+      # ============================================================
+
+      - name: Remove Finder metadata from Unity Assets
+        shell: bash
+        run: |
+          echo "======================================"
+          echo "REMOVING .DS_STORE FROM ASSETS"
+          echo "======================================"
+
+          echo "Found before deletion:"
+
+          find "$GITHUB_WORKSPACE/Assets" \
+            -name ".DS_Store" \
+            -type f \
+            -print || true
+
+          find "$GITHUB_WORKSPACE/Assets" \
+            -name ".DS_Store" \
+            -type f \
+            -delete
+
+          echo ""
+          echo "Remaining .DS_Store files in Assets:"
+
+          REMAINING=$(find "$GITHUB_WORKSPACE/Assets" \
+            -name ".DS_Store" \
+            -type f \
+            -print)
+
+          if [ -n "$REMAINING" ]; then
+            echo "$REMAINING"
+            echo "ERROR: Could not remove all .DS_Store files."
+            exit 1
+          fi
+
+          echo "None."
+
+
+      # ============================================================
+      # VERIFY STREAMING ASSETS
+      # ============================================================
+
+      - name: Verify StreamingAssets
+        shell: bash
+        run: |
+          echo "======================================"
+          echo "STREAMING ASSETS"
+          echo "======================================"
+
+          if [ -d "$GITHUB_WORKSPACE/Assets/StreamingAssets" ]; then
+
+            find "$GITHUB_WORKSPACE/Assets/StreamingAssets" \
+              -maxdepth 3 \
+              -print
+
+            if [ -e "$GITHUB_WORKSPACE/Assets/StreamingAssets/.DS_Store" ]; then
+              echo ""
+              echo "ERROR: Assets/StreamingAssets/.DS_Store still exists."
+              exit 1
+            fi
+
+          else
+            echo "No StreamingAssets directory."
+          fi
+
+
+      # ============================================================
       # VERIFY UNITY
-      # ==========================================================
+      # ============================================================
 
-      - name: Verify Unity
+      - name: Verify Unity installation
         shell: bash
         run: |
           UNITY="/Applications/Unity/Hub/Editor/6000.0.75f1/Unity.app/Contents/MacOS/Unity"
 
+          echo "======================================"
+          echo "UNITY INSTALLATION"
+          echo "======================================"
+
           if [ ! -x "$UNITY" ]; then
 
-            echo "ERROR: Unity 6000.0.75f1 not found."
+            echo "ERROR:"
+            echo "Unity 6000.0.75f1 was not found."
 
             echo ""
-            echo "Installed Unity versions:"
+            echo "Installed editors:"
 
             ls -la "/Applications/Unity/Hub/Editor/" || true
 
             exit 1
           fi
 
-          echo "Unity found:"
+          echo "Unity:"
           echo "$UNITY"
 
+          echo ""
+          echo "Project version:"
 
-      # ==========================================================
-      # DELETE ONLY PREVIOUS BUILD OUTPUT
-      # ==========================================================
+          cat ProjectSettings/ProjectVersion.txt
+
+
+      # ============================================================
+      # VERIFY WINDOWS BUILD SUPPORT
+      # ============================================================
+
+      - name: Verify Windows Build Support
+        shell: bash
+        run: |
+          WINDOWS_SUPPORT="/Applications/Unity/Hub/Editor/6000.0.75f1/Unity.app/Contents/PlaybackEngines/WindowsStandaloneSupport"
+
+          echo "======================================"
+          echo "WINDOWS BUILD SUPPORT"
+          echo "======================================"
+
+          if [ ! -d "$WINDOWS_SUPPORT" ]; then
+
+            echo "ERROR:"
+            echo "Windows Build Support is not installed."
+            echo ""
+            echo "Install Windows Build Support (Mono)"
+            echo "from Unity Hub -> Installs -> 6000.0.75f1 -> Add modules."
+
+            exit 1
+          fi
+
+          echo "Windows Build Support found:"
+          echo "$WINDOWS_SUPPORT"
+
+
+      # ============================================================
+      # SHOW SCENE SETTINGS
+      # ============================================================
+
+      - name: Show Unity scene settings
+        shell: bash
+        run: |
+          echo "======================================"
+          echo "EDITOR BUILD SETTINGS"
+          echo "======================================"
+
+          cat ProjectSettings/EditorBuildSettings.asset || true
+
+
+      # ============================================================
+      # REMOVE ONLY PREVIOUS GENERATED BUILD FILES
+      # ============================================================
+      #
+      # This does NOT remove:
+      #
+      # Library
+      # Packages
+      # Assets
+      # Unity
+      # Homebrew
+      # Docker
+      #
+      # Only output generated by previous CI builds.
+      # ============================================================
 
       - name: Prepare build output
         shell: bash
         run: |
-          rm -rf Build/Windows
-          rm -rf Build/macOS
+          echo "======================================"
+          echo "PREPARING BUILD OUTPUT"
+          echo "======================================"
 
-          rm -f ModdingEditor-Windows.zip
-          rm -f ModdingEditor-macOS.zip
+          rm -rf "$GITHUB_WORKSPACE/Build/Windows"
+          rm -rf "$GITHUB_WORKSPACE/Build/macOS"
 
-          mkdir -p Build/Windows
-          mkdir -p Build/macOS
+          rm -f "$GITHUB_WORKSPACE/ModdingEditor-Windows.zip"
+          rm -f "$GITHUB_WORKSPACE/ModdingEditor-macOS.zip"
+
+          rm -f "$GITHUB_WORKSPACE/windows-build.log"
+          rm -f "$GITHUB_WORKSPACE/macos-build.log"
+
+          rm -rf "$GITHUB_WORKSPACE/ZipTest"
+
+          mkdir -p "$GITHUB_WORKSPACE/Build/Windows"
+          mkdir -p "$GITHUB_WORKSPACE/Build/macOS"
 
 
-      # ==========================================================
+      # ============================================================
+      # REMOVE .DS_STORE AGAIN IMMEDIATELY BEFORE BUILD
+      # ============================================================
+
+      - name: Final .DS_Store check before Windows build
+        shell: bash
+        run: |
+          find "$GITHUB_WORKSPACE/Assets" \
+            -name ".DS_Store" \
+            -type f \
+            -delete
+
+          if find "$GITHUB_WORKSPACE/Assets" \
+            -name ".DS_Store" \
+            -type f \
+            -print \
+            | grep -q .
+          then
+            echo "ERROR: .DS_Store still exists inside Assets."
+            exit 1
+          fi
+
+
+      # ============================================================
       # WINDOWS BUILD
-      # ==========================================================
+      # ============================================================
 
       - name: Build Windows
         shell: bash
@@ -173,7 +385,12 @@ jobs:
 
           LOG="$GITHUB_WORKSPACE/windows-build.log"
 
+          echo "======================================"
+          echo "BUILD WINDOWS"
+          echo "======================================"
+
           set +e
+          set -o pipefail
 
           "$UNITY" \
             -batchmode \
@@ -181,53 +398,103 @@ jobs:
             -accept-apiupdate \
             -projectPath "$GITHUB_WORKSPACE" \
             -executeMethod CIBuilder.BuildWindows \
-            -logFile "$LOG"
+            -logFile - \
+            2>&1 | tee "$LOG"
 
-          EXIT_CODE=$?
+          EXIT_CODE=${PIPESTATUS[0]}
 
           set -e
 
-          echo ""
-          echo "======================================"
-          echo "WINDOWS UNITY LOG"
-          echo "======================================"
+          if [ "$EXIT_CODE" -ne 0 ]; then
 
-          cat "$LOG" || true
-
-          if [ $EXIT_CODE -ne 0 ]; then
             echo ""
-            echo "Windows build failed: $EXIT_CODE"
-            exit $EXIT_CODE
+            echo "======================================"
+            echo "WINDOWS BUILD FAILED"
+            echo "======================================"
+
+            echo ""
+            echo "Relevant errors:"
+
+            grep -nEi \
+              "error CS|Exception|BuildFailed|Failed|Aborting|executeMethod|Compilation failed" \
+              "$LOG" \
+              | tail -150 || true
+
+            exit "$EXIT_CODE"
           fi
 
+          echo ""
+          echo "Windows build completed."
 
-      # ==========================================================
-      # VERIFY WINDOWS EXE
-      # ==========================================================
 
-      - name: Verify Windows executable
+      # ============================================================
+      # VERIFY WINDOWS BUILD
+      # ============================================================
+
+      - name: Verify Windows build
         shell: bash
         run: |
+          echo "======================================"
+          echo "WINDOWS BUILD OUTPUT"
+          echo "======================================"
+
           if [ ! -f "Build/Windows/ModdingEditor.exe" ]; then
 
-            echo "ERROR: ModdingEditor.exe was not created."
+            echo "ERROR:"
+            echo "Build/Windows/ModdingEditor.exe was not created."
 
-            find Build/Windows -maxdepth 5 -print
+            find Build/Windows -maxdepth 6 -print || true
 
             exit 1
           fi
 
-          echo "Windows executable:"
-          ls -lh Build/Windows/ModdingEditor.exe
+          echo "EXE found:"
+
+          ls -lh "Build/Windows/ModdingEditor.exe"
+
+          echo ""
+          echo "Windows build contents:"
+
+          find Build/Windows \
+            -maxdepth 3 \
+            -print
 
 
-      # ==========================================================
-      # WINDOWS ZIP
-      # ==========================================================
+      # ============================================================
+      # CHECK WINDOWS BUILD FOR DS_STORE
+      # ============================================================
+
+      - name: Verify Windows build metadata
+        shell: bash
+        run: |
+          FOUND=$(find "Build/Windows" \
+            -name ".DS_Store" \
+            -type f \
+            -print)
+
+          if [ -n "$FOUND" ]; then
+
+            echo "ERROR:"
+            echo ".DS_Store was copied into Windows build:"
+            echo "$FOUND"
+
+            exit 1
+          fi
+
+          echo "No .DS_Store found in Windows build."
+
+
+      # ============================================================
+      # CREATE WINDOWS ZIP
+      # ============================================================
 
       - name: Create Windows ZIP
         shell: bash
         run: |
+          echo "======================================"
+          echo "CREATE WINDOWS ZIP"
+          echo "======================================"
+
           /usr/bin/ditto \
             -c \
             -k \
@@ -235,12 +502,49 @@ jobs:
             "Build/Windows" \
             "ModdingEditor-Windows.zip"
 
-          ls -lh ModdingEditor-Windows.zip
+          echo ""
+          echo "Created:"
+
+          ls -lh "ModdingEditor-Windows.zip"
 
 
-      # ==========================================================
+      # ============================================================
+      # CLEAN DS_STORE AGAIN BEFORE MAC BUILD
+      # ============================================================
+      #
+      # Windows build may take a while.
+      # Do another check immediately before building macOS.
+      # ============================================================
+
+      - name: Final .DS_Store check before macOS build
+        shell: bash
+        run: |
+          echo "======================================"
+          echo "FINAL MACOS .DS_STORE CHECK"
+          echo "======================================"
+
+          find "$GITHUB_WORKSPACE/Assets" \
+            -name ".DS_Store" \
+            -type f \
+            -print \
+            -delete
+
+          if find "$GITHUB_WORKSPACE/Assets" \
+            -name ".DS_Store" \
+            -type f \
+            -print \
+            | grep -q .
+          then
+            echo "ERROR: .DS_Store still exists inside Assets."
+            exit 1
+          fi
+
+          echo "Assets directory is clean of .DS_Store."
+
+
+      # ============================================================
       # MACOS BUILD
-      # ==========================================================
+      # ============================================================
 
       - name: Build macOS
         shell: bash
@@ -252,7 +556,12 @@ jobs:
 
           LOG="$GITHUB_WORKSPACE/macos-build.log"
 
+          echo "======================================"
+          echo "BUILD MACOS"
+          echo "======================================"
+
           set +e
+          set -o pipefail
 
           "$UNITY" \
             -batchmode \
@@ -260,99 +569,299 @@ jobs:
             -accept-apiupdate \
             -projectPath "$GITHUB_WORKSPACE" \
             -executeMethod CIBuilder.BuildMacOS \
-            -logFile "$LOG"
+            -logFile - \
+            2>&1 | tee "$LOG"
 
-          EXIT_CODE=$?
+          EXIT_CODE=${PIPESTATUS[0]}
 
           set -e
 
-          echo ""
-          echo "======================================"
-          echo "MACOS UNITY LOG"
-          echo "======================================"
+          if [ "$EXIT_CODE" -ne 0 ]; then
 
-          cat "$LOG" || true
-
-          if [ $EXIT_CODE -ne 0 ]; then
             echo ""
-            echo "macOS build failed: $EXIT_CODE"
-            exit $EXIT_CODE
+            echo "======================================"
+            echo "MACOS BUILD FAILED"
+            echo "======================================"
+
+            echo ""
+            echo "Relevant errors:"
+
+            grep -nEi \
+              "error CS|Exception|BuildFailed|Failed|Aborting|executeMethod|Compilation failed" \
+              "$LOG" \
+              | tail -150 || true
+
+            exit "$EXIT_CODE"
           fi
 
+          echo ""
+          echo "macOS build completed."
 
-      # ==========================================================
-      # VERIFY MAC APP
-      # ==========================================================
+
+      # ============================================================
+      # VERIFY MACOS APP
+      # ============================================================
 
       - name: Verify macOS application
         shell: bash
         run: |
-          if [ ! -d "Build/macOS/ModdingEditor.app" ]; then
+          echo "======================================"
+          echo "MACOS BUILD OUTPUT"
+          echo "======================================"
 
-            echo "ERROR: ModdingEditor.app was not created."
+          APP="Build/macOS/ModdingEditor.app"
 
-            find Build/macOS -maxdepth 5 -print
+          if [ ! -d "$APP" ]; then
+
+            echo "ERROR:"
+            echo "ModdingEditor.app was not created."
+
+            find Build/macOS \
+              -maxdepth 6 \
+              -print || true
 
             exit 1
           fi
 
-          echo "macOS application found:"
-          ls -ld Build/macOS/ModdingEditor.app
+          echo "Application found:"
+          echo "$APP"
 
 
-      # ==========================================================
-      # MACOS ZIP
-      # ==========================================================
+      # ============================================================
+      # IMPORTANT: DO NOT DELETE DS_STORE FROM APP
+      # ============================================================
+      #
+      # If .DS_Store exists in the built .app, FAIL.
+      #
+      # Do NOT delete it here because Unity already signed the app.
+      # Deleting it after signing would break the seal again.
+      # ============================================================
+
+      - name: Check macOS app for .DS_Store
+        shell: bash
+        run: |
+          APP="Build/macOS/ModdingEditor.app"
+
+          echo "======================================"
+          echo "CHECK APP FOR .DS_STORE"
+          echo "======================================"
+
+          FOUND=$(find "$APP" \
+            -name ".DS_Store" \
+            -type f \
+            -print)
+
+          if [ -n "$FOUND" ]; then
+
+            echo ""
+            echo "ERROR:"
+            echo ".DS_Store was included inside ModdingEditor.app:"
+            echo ""
+            echo "$FOUND"
+            echo ""
+            echo "The build will NOT be uploaded."
+            echo "The file must be removed from Assets BEFORE building."
+
+            exit 1
+          fi
+
+          echo "No .DS_Store files found inside ModdingEditor.app."
+
+
+      # ============================================================
+      # VERIFY UNITY'S MACOS SIGNATURE
+      # ============================================================
+      #
+      # Currently this may be an ad-hoc signature.
+      # This step verifies that the bundle has NOT been modified
+      # after signing.
+      # ============================================================
+
+      - name: Verify macOS code signature
+        shell: bash
+        run: |
+          APP="Build/macOS/ModdingEditor.app"
+
+          echo "======================================"
+          echo "VERIFY MACOS CODE SIGNATURE"
+          echo "======================================"
+
+          /usr/bin/codesign \
+            --verify \
+            --deep \
+            --strict \
+            --verbose=4 \
+            "$APP"
+
+
+      # ============================================================
+      # CREATE MACOS ZIP
+      # ============================================================
 
       - name: Create macOS ZIP
         shell: bash
         run: |
+          APP="Build/macOS/ModdingEditor.app"
+
+          echo "======================================"
+          echo "CREATE MACOS ZIP"
+          echo "======================================"
+
           /usr/bin/ditto \
             -c \
             -k \
             --sequesterRsrc \
             --keepParent \
-            "Build/macOS/ModdingEditor.app" \
+            "$APP" \
             "ModdingEditor-macOS.zip"
 
-          ls -lh ModdingEditor-macOS.zip
+          echo ""
+          echo "Created:"
+
+          ls -lh "ModdingEditor-macOS.zip"
 
 
-      # ==========================================================
-      # VERIFY FINAL FILES
-      # ==========================================================
+      # ============================================================
+      # EXTRACT ZIP AND VERIFY AGAIN
+      # ============================================================
+      #
+      # This catches exactly the problem you had:
+      #
+      # "a sealed resource is missing or invalid"
+      #
+      # BEFORE uploading the ZIP to GitHub.
+      # ============================================================
+
+      - name: Verify packaged macOS application
+        shell: bash
+        run: |
+          echo "======================================"
+          echo "VERIFY MACOS ZIP"
+          echo "======================================"
+
+          rm -rf "ZipTest"
+
+          mkdir -p "ZipTest"
+
+          /usr/bin/ditto \
+            -x \
+            -k \
+            "ModdingEditor-macOS.zip" \
+            "ZipTest"
+
+          TEST_APP="ZipTest/ModdingEditor.app"
+
+          if [ ! -d "$TEST_APP" ]; then
+            echo "ERROR: App was not correctly extracted."
+            exit 1
+          fi
+
+          echo ""
+          echo "Checking for .DS_Store..."
+
+          FOUND=$(find "$TEST_APP" \
+            -name ".DS_Store" \
+            -type f \
+            -print)
+
+          if [ -n "$FOUND" ]; then
+
+            echo "ERROR:"
+            echo ".DS_Store exists in packaged app:"
+            echo "$FOUND"
+
+            exit 1
+          fi
+
+          echo "No .DS_Store found."
+
+          echo ""
+          echo "Checking signature after ZIP extraction..."
+
+          /usr/bin/codesign \
+            --verify \
+            --deep \
+            --strict \
+            --verbose=4 \
+            "$TEST_APP"
+
+          echo ""
+          echo "Packaged app signature is valid."
+
+
+      # ============================================================
+      # FINAL FILE CHECK
+      # ============================================================
 
       - name: Verify release files
         shell: bash
         run: |
-          test -f ModdingEditor-Windows.zip
-          test -f ModdingEditor-macOS.zip
-
           echo "======================================"
           echo "FINAL RELEASE FILES"
           echo "======================================"
 
-          ls -lh ModdingEditor-Windows.zip
-          ls -lh ModdingEditor-macOS.zip
+          if [ ! -f "ModdingEditor-Windows.zip" ]; then
+            echo "ERROR: Windows ZIP missing."
+            exit 1
+          fi
+
+          if [ ! -f "ModdingEditor-macOS.zip" ]; then
+            echo "ERROR: macOS ZIP missing."
+            exit 1
+          fi
+
+          ls -lh \
+            "ModdingEditor-Windows.zip" \
+            "ModdingEditor-macOS.zip"
 
 
-      # ==========================================================
-      # GITHUB RELEASE
-      # ==========================================================
+      # ============================================================
+      # CREATE OR UPDATE GITHUB RELEASE
+      # ============================================================
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Modding Editor ${{ github.ref_name }}
-
-          generate_release_notes: true
-
-          fail_on_unmatched_files: true
-
-          files: |
-            ModdingEditor-Windows.zip
-            ModdingEditor-macOS.zip
-
+      - name: Publish GitHub Release
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+
+        run: |
+          TAG="${{ github.ref_name }}"
+
+          echo "======================================"
+          echo "GITHUB RELEASE"
+          echo "======================================"
+
+          echo "Tag:"
+          echo "$TAG"
+
+          if gh release view "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            >/dev/null 2>&1
+          then
+
+            echo ""
+            echo "Release already exists."
+            echo "Replacing build assets..."
+
+            gh release upload "$TAG" \
+              "ModdingEditor-Windows.zip" \
+              "ModdingEditor-macOS.zip" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+
+          else
+
+            echo ""
+            echo "Creating new release..."
+
+            gh release create "$TAG" \
+              "ModdingEditor-Windows.zip" \
+              "ModdingEditor-macOS.zip" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Modding Editor $TAG" \
+              --generate-notes
+
+          fi
+
+          echo ""
+          echo "Release completed."
