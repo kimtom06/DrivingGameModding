@@ -8,31 +8,60 @@ on:
 permissions:
   contents: write
 
-
 jobs:
-  build-release:
 
+  build-release:
     name: Build Windows + macOS
 
-    # Your own Mac
     runs-on:
       - self-hosted
       - macOS
 
     steps:
 
-      # ============================================================
-      # PREPARE HOMEBREW + GIT LFS
-      # ============================================================
+      # ==========================================================
+      # CHECK RUNNER USER
+      # ==========================================================
 
-      - name: Prepare Homebrew and Git LFS
+      - name: Check runner
         shell: bash
         run: |
           echo "======================================"
-          echo "Preparing self-hosted Mac"
+          echo "SELF HOSTED MAC"
           echo "======================================"
 
-          # Apple Silicon Homebrew
+          echo "User:"
+          whoami
+
+          echo ""
+          echo "Home:"
+          echo "$HOME"
+
+          echo ""
+          echo "Runner:"
+          echo "$RUNNER_NAME"
+
+          echo ""
+          echo "Architecture:"
+          echo "$RUNNER_ARCH"
+
+          if [ "$(whoami)" = "root" ]; then
+            echo ""
+            echo "ERROR:"
+            echo "GitHub runner is running as root."
+            echo "Run the runner using the same macOS user that"
+            echo "has Unity Hub and the Unity license activated."
+            exit 1
+          fi
+
+
+      # ==========================================================
+      # PREPARE HOMEBREW / GIT LFS
+      # ==========================================================
+
+      - name: Prepare Git LFS
+        shell: bash
+        run: |
           if [ -x "/opt/homebrew/bin/brew" ]; then
 
             echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
@@ -42,7 +71,6 @@ jobs:
 
             BREW="/opt/homebrew/bin/brew"
 
-          # Intel Mac Homebrew
           elif [ -x "/usr/local/bin/brew" ]; then
 
             echo "/usr/local/bin" >> "$GITHUB_PATH"
@@ -54,133 +82,53 @@ jobs:
 
           else
 
-            echo "ERROR: Homebrew was not found."
+            echo "ERROR: Homebrew not found."
             exit 1
 
           fi
 
-
-          echo ""
-          echo "Homebrew:"
-          "$BREW" --version
-
-
-          # --------------------------------------------------------
-          # Git LFS
-          # --------------------------------------------------------
-
           if ! command -v git-lfs >/dev/null 2>&1; then
-
-            echo ""
-            echo "Git LFS is not installed."
-            echo "Installing Git LFS..."
-
             "$BREW" install git-lfs
-
           fi
 
-
-          echo ""
-          echo "Git LFS:"
           git lfs version
-
           git lfs install --skip-repo
 
 
-      # ============================================================
+      # ==========================================================
       # CHECKOUT
-      # ============================================================
+      # ==========================================================
 
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v5
         with:
-
-          # Required for versioning: Tag
           fetch-depth: 0
-
-          # Download Git LFS files
-          lfs: true
-
-          # IMPORTANT FOR SELF-HOSTED:
-          # Do not git clean the whole project workspace.
-          #
-          # This helps keep Unity Library between builds.
           clean: false
 
 
-      # ============================================================
-      # VERIFY LFS
-      # ============================================================
+      # ==========================================================
+      # DOWNLOAD LFS FILES
+      # ==========================================================
 
-      - name: Verify Git LFS
+      - name: Download Git LFS files
         shell: bash
         run: |
-          echo "======================================"
-          echo "Git LFS"
-          echo "======================================"
-
-          git lfs version
+          git lfs install
           git lfs pull
 
-          echo ""
-          echo "LFS files:"
-          git lfs ls-files || true
 
+      # ==========================================================
+      # VERIFY UNITY
+      # ==========================================================
 
-      # ============================================================
-      # BUILD INFORMATION
-      # ============================================================
-
-      - name: Show build information
+      - name: Verify Unity
         shell: bash
         run: |
-          echo "======================================"
-          echo "Modding Editor Build"
-          echo "======================================"
+          UNITY="/Applications/Unity/Hub/Editor/6000.0.75f1/Unity.app/Contents/MacOS/Unity"
 
-          echo "Tag:"
-          echo "${{ github.ref_name }}"
+          if [ ! -x "$UNITY" ]; then
 
-          echo ""
-          echo "Runner:"
-          echo "$RUNNER_NAME"
-
-          echo ""
-          echo "OS:"
-          echo "$RUNNER_OS"
-
-          echo ""
-          echo "Architecture:"
-          echo "$RUNNER_ARCH"
-
-          echo ""
-          echo "Workspace:"
-          echo "$GITHUB_WORKSPACE"
-
-          echo ""
-          echo "Unity Project Version:"
-          cat ProjectSettings/ProjectVersion.txt
-
-
-      # ============================================================
-      # VERIFY UNITY INSTALLATION
-      # ============================================================
-
-      - name: Verify Unity 6000.0.75f1
-        shell: bash
-        run: |
-
-          UNITY_PATH="/Applications/Unity/Hub/Editor/6000.0.75f1/Unity.app/Contents/MacOS/Unity"
-
-          echo "======================================"
-          echo "Checking Unity"
-          echo "======================================"
-
-          if [ ! -f "$UNITY_PATH" ]; then
-
-            echo "ERROR:"
-            echo "Unity 6000.0.75f1 was not found:"
-            echo "$UNITY_PATH"
+            echo "ERROR: Unity 6000.0.75f1 not found."
 
             echo ""
             echo "Installed Unity versions:"
@@ -188,324 +136,214 @@ jobs:
             ls -la "/Applications/Unity/Hub/Editor/" || true
 
             exit 1
-
           fi
 
           echo "Unity found:"
-          echo "$UNITY_PATH"
+          echo "$UNITY"
 
 
-      # ============================================================
-      # REMOVE ONLY OLD BUILD OUTPUT
-      # ============================================================
-      #
-      # This does NOT clean your Mac.
-      #
-      # It only removes old generated build files inside this
-      # GitHub Actions workspace so an old EXE cannot accidentally
-      # be uploaded as a new release.
-      # ============================================================
+      # ==========================================================
+      # DELETE ONLY PREVIOUS BUILD OUTPUT
+      # ==========================================================
 
-      - name: Prepare build folders
+      - name: Prepare build output
         shell: bash
         run: |
-
-          rm -rf build/windows
-          rm -rf build/macos
-
-          rm -rf release
+          rm -rf Build/Windows
+          rm -rf Build/macOS
 
           rm -f ModdingEditor-Windows.zip
           rm -f ModdingEditor-macOS.zip
 
-          mkdir -p build/windows
-          mkdir -p build/macos
-          mkdir -p release
+          mkdir -p Build/Windows
+          mkdir -p Build/macOS
 
 
-      # ============================================================
+      # ==========================================================
       # WINDOWS BUILD
-      # ============================================================
+      # ==========================================================
 
       - name: Build Windows
-        uses: game-ci/unity-builder@v5
-        with:
-
-          unityVersion: 6000.0.75f1
-
-          targetPlatform: StandaloneWindows64
-
-          buildName: ModdingEditor
-
-          buildsPath: build/windows
-
-          versioning: Tag
-
-          # ======================================================
-          # IMPORTANT
-          #
-          # Do NOT attempt GitHub/Unity account activation.
-          #
-          # Use the Unity license already activated on this Mac.
-          # ======================================================
-
-          skipActivation: true
-
-
-      # ============================================================
-      # FIND WINDOWS EXE
-      # ============================================================
-
-      - name: Verify Windows build
         shell: bash
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+
         run: |
+          UNITY="/Applications/Unity/Hub/Editor/6000.0.75f1/Unity.app/Contents/MacOS/Unity"
 
+          LOG="$GITHUB_WORKSPACE/windows-build.log"
+
+          set +e
+
+          "$UNITY" \
+            -batchmode \
+            -quit \
+            -accept-apiupdate \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -executeMethod CIBuilder.BuildWindows \
+            -logFile "$LOG"
+
+          EXIT_CODE=$?
+
+          set -e
+
+          echo ""
           echo "======================================"
-          echo "WINDOWS BUILD OUTPUT"
+          echo "WINDOWS UNITY LOG"
           echo "======================================"
 
-          find build/windows -maxdepth 7 -print
+          cat "$LOG" || true
 
-
-          EXE_PATH=$(find build/windows \
-            -type f \
-            -name "ModdingEditor.exe" \
-            -print \
-            -quit)
-
-
-          if [ -z "$EXE_PATH" ]; then
-
+          if [ $EXIT_CODE -ne 0 ]; then
             echo ""
-            echo "ERROR:"
-            echo "ModdingEditor.exe was not found."
-
-            echo ""
-            echo "Available files:"
-
-            find build/windows -maxdepth 10 -print
-
-            exit 1
-
+            echo "Windows build failed: $EXIT_CODE"
+            exit $EXIT_CODE
           fi
 
 
-          echo ""
-          echo "Windows EXE found:"
-          echo "$EXE_PATH"
+      # ==========================================================
+      # VERIFY WINDOWS EXE
+      # ==========================================================
+
+      - name: Verify Windows executable
+        shell: bash
+        run: |
+          if [ ! -f "Build/Windows/ModdingEditor.exe" ]; then
+
+            echo "ERROR: ModdingEditor.exe was not created."
+
+            find Build/Windows -maxdepth 5 -print
+
+            exit 1
+          fi
+
+          echo "Windows executable:"
+          ls -lh Build/Windows/ModdingEditor.exe
 
 
-      # ============================================================
-      # CREATE WINDOWS ZIP
-      # ============================================================
+      # ==========================================================
+      # WINDOWS ZIP
+      # ==========================================================
 
       - name: Create Windows ZIP
         shell: bash
         run: |
-
-          EXE_PATH=$(find build/windows \
-            -type f \
-            -name "ModdingEditor.exe" \
-            -print \
-            -quit)
-
-
-          if [ -z "$EXE_PATH" ]; then
-            echo "ERROR: ModdingEditor.exe not found."
-            exit 1
-          fi
-
-
-          WINDOWS_BUILD_DIR=$(dirname "$EXE_PATH")
-
-
-          echo "======================================"
-          echo "Windows build directory"
-          echo "======================================"
-
-          echo "$WINDOWS_BUILD_DIR"
-
-
-          # Copy entire Windows build to release directory.
-          #
-          # EXE alone is NOT enough.
-          # UnityPlayer.dll, Data folder etc. are also required.
-
-          mkdir -p release/ModdingEditor-Windows
-
-
-          /usr/bin/ditto \
-            "$WINDOWS_BUILD_DIR" \
-            "release/ModdingEditor-Windows"
-
-
-          # ZIP it
-
           /usr/bin/ditto \
             -c \
             -k \
             --keepParent \
-            "release/ModdingEditor-Windows" \
+            "Build/Windows" \
             "ModdingEditor-Windows.zip"
-
-
-          echo ""
-          echo "Created Windows ZIP:"
 
           ls -lh ModdingEditor-Windows.zip
 
 
-      # ============================================================
+      # ==========================================================
       # MACOS BUILD
-      # ============================================================
+      # ==========================================================
 
       - name: Build macOS
-        uses: game-ci/unity-builder@v5
-        with:
-
-          unityVersion: 6000.0.75f1
-
-          targetPlatform: StandaloneOSX
-
-          buildName: ModdingEditor
-
-          buildsPath: build/macos
-
-          versioning: Tag
-
-          skipActivation: true
-
-
-      # ============================================================
-      # FIND MAC APP
-      # ============================================================
-
-      - name: Verify macOS build
         shell: bash
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+
         run: |
+          UNITY="/Applications/Unity/Hub/Editor/6000.0.75f1/Unity.app/Contents/MacOS/Unity"
 
+          LOG="$GITHUB_WORKSPACE/macos-build.log"
+
+          set +e
+
+          "$UNITY" \
+            -batchmode \
+            -quit \
+            -accept-apiupdate \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -executeMethod CIBuilder.BuildMacOS \
+            -logFile "$LOG"
+
+          EXIT_CODE=$?
+
+          set -e
+
+          echo ""
           echo "======================================"
-          echo "MACOS BUILD OUTPUT"
+          echo "MACOS UNITY LOG"
           echo "======================================"
 
-          find build/macos -maxdepth 7 -print
+          cat "$LOG" || true
 
-
-          APP_PATH=$(find build/macos \
-            -type d \
-            -name "ModdingEditor.app" \
-            -print \
-            -quit)
-
-
-          if [ -z "$APP_PATH" ]; then
-
+          if [ $EXIT_CODE -ne 0 ]; then
             echo ""
-            echo "ERROR:"
-            echo "ModdingEditor.app was not found."
-
-            echo ""
-            echo "Available files:"
-
-            find build/macos -maxdepth 10 -print
-
-            exit 1
-
+            echo "macOS build failed: $EXIT_CODE"
+            exit $EXIT_CODE
           fi
 
 
-          echo ""
-          echo "macOS app found:"
-          echo "$APP_PATH"
+      # ==========================================================
+      # VERIFY MAC APP
+      # ==========================================================
+
+      - name: Verify macOS application
+        shell: bash
+        run: |
+          if [ ! -d "Build/macOS/ModdingEditor.app" ]; then
+
+            echo "ERROR: ModdingEditor.app was not created."
+
+            find Build/macOS -maxdepth 5 -print
+
+            exit 1
+          fi
+
+          echo "macOS application found:"
+          ls -ld Build/macOS/ModdingEditor.app
 
 
-      # ============================================================
-      # CREATE MACOS ZIP
-      # ============================================================
+      # ==========================================================
+      # MACOS ZIP
+      # ==========================================================
 
       - name: Create macOS ZIP
         shell: bash
         run: |
-
-          APP_PATH=$(find build/macos \
-            -type d \
-            -name "ModdingEditor.app" \
-            -print \
-            -quit)
-
-
-          if [ -z "$APP_PATH" ]; then
-            echo "ERROR: ModdingEditor.app not found."
-            exit 1
-          fi
-
-
-          echo "======================================"
-          echo "Creating macOS ZIP"
-          echo "======================================"
-
-          echo "$APP_PATH"
-
-
-          # ditto preserves the .app bundle structure and macOS metadata.
-
           /usr/bin/ditto \
             -c \
             -k \
             --sequesterRsrc \
             --keepParent \
-            "$APP_PATH" \
+            "Build/macOS/ModdingEditor.app" \
             "ModdingEditor-macOS.zip"
-
-
-          echo ""
-          echo "Created macOS ZIP:"
 
           ls -lh ModdingEditor-macOS.zip
 
 
-      # ============================================================
-      # VERIFY RELEASE FILES
-      # ============================================================
+      # ==========================================================
+      # VERIFY FINAL FILES
+      # ==========================================================
 
       - name: Verify release files
         shell: bash
         run: |
+          test -f ModdingEditor-Windows.zip
+          test -f ModdingEditor-macOS.zip
 
           echo "======================================"
-          echo "RELEASE FILES"
+          echo "FINAL RELEASE FILES"
           echo "======================================"
-
-
-          if [ ! -f "ModdingEditor-Windows.zip" ]; then
-            echo "ERROR: ModdingEditor-Windows.zip missing."
-            exit 1
-          fi
-
-
-          if [ ! -f "ModdingEditor-macOS.zip" ]; then
-            echo "ERROR: ModdingEditor-macOS.zip missing."
-            exit 1
-          fi
-
 
           ls -lh ModdingEditor-Windows.zip
           ls -lh ModdingEditor-macOS.zip
 
 
-      # ============================================================
-      # CREATE / UPDATE GITHUB RELEASE
-      # ============================================================
-      #
-      # v3 uses Node 24.
-      # ============================================================
+      # ==========================================================
+      # GITHUB RELEASE
+      # ==========================================================
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-
           tag_name: ${{ github.ref_name }}
-
           name: Modding Editor ${{ github.ref_name }}
 
           generate_release_notes: true
