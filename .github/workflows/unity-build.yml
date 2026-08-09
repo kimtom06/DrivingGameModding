@@ -1,0 +1,141 @@
+name: Build Modding Editor Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+
+  # ============================================
+  # WINDOWS BUILD
+  # ============================================
+
+  build-windows:
+    name: Build Windows
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Windows-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-Windows-
+            Library-
+
+      - name: Build Windows
+        uses: game-ci/unity-builder@v5
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: StandaloneWindows64
+          buildName: ModdingEditor
+          buildsPath: build
+
+      - name: Create Windows ZIP
+        run: |
+          cd build
+          zip -r ../ModdingEditor-Windows.zip StandaloneWindows64
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ModdingEditor-Windows
+          path: ModdingEditor-Windows.zip
+
+
+  # ============================================
+  # MAC BUILD
+  # ============================================
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-macOS-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-macOS-
+            Library-
+
+      - name: Build macOS
+        uses: game-ci/unity-builder@v5
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: StandaloneOSX
+          buildName: ModdingEditor
+          buildsPath: build
+          cacheUnityInstallationOnMac: true
+
+      - name: Create macOS ZIP
+        run: |
+          cd build/StandaloneOSX
+          ditto -c -k --sequesterRsrc --keepParent ModdingEditor.app ../../ModdingEditor-macOS.zip
+
+      - name: Upload macOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ModdingEditor-macOS
+          path: ModdingEditor-macOS.zip
+
+
+  # ============================================
+  # GITHUB RELEASE
+  # ============================================
+
+  create-release:
+    name: Create GitHub Release
+
+    needs:
+      - build-windows
+      - build-macos
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Download builds
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+
+      - name: Show release files
+        run: find release -type f
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            release/ModdingEditor-Windows/ModdingEditor-Windows.zip \
+            release/ModdingEditor-macOS/ModdingEditor-macOS.zip \
+            --title "Modding Editor ${{ github.ref_name }}" \
+            --generate-notes
