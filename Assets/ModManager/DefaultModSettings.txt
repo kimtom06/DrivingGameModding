@@ -1,0 +1,56 @@
+# SDGMOD 사용자 설정 파일
+# 해당 파일을 수정하시기 전 아직 3D모델링, 영어에 익숙하시지 않으신 분들은 ChatGPT등의 AI에게 도움을 받으시는것을 추천드립니다.
+# 형식: key=value
+# # 또는 ; 로 시작하는 줄은 주석입니다. 모드 제작시 무시됩니다. 메모를 남길때 사용하세요
+# 숫자의 소수점은 마침표(.)를 사용하고 Vector3는 x,y,z로 작성합니다.
+
+#모드의 이름, 원작자
+mod.name= MOD_NAME
+mod.author= AUTHOR
+
+#자동차의 내부 핸들 모델이 돌아가야 하는 x,y,z축 방향백터를 나타냅니다.
+car.wheel.steeringWheelRotation = 0,-1,0
+
+#자동차의 바퀴 조향,서스팬션거리를 결정하는 변수입니다.
+car.wheel.maxSteerAngle = 40
+car.wheel.suspension.distance = 0.1
+
+#자동차의 무게입니다. (kg)
+car.physics.mass = 1500
+
+#자동차의 성능을 결정하는 변수들입니다.
+car.engine.maxSpeed = 170
+car.engine.engineTorque = 200
+car.engine.brakeTorque = 4000
+car.engine.downforce = 25
+car.engine.rpmLow = 1000
+car.engine.rpmHigh = 5000
+car.engine.fuelTankCapacity = 50
+car.engine.backFire = false
+car.engine.booster = false
+car.engine.reverseBeep = false
+car.engine.airBrake = false
+
+
+#엔진 소리를 불러온 후 해당 오디오의 이름을 확장자를 제거하고 아래에 적어주세요.
+car.audio.engineSound = ENGINE_SOUND_FILE_NAME
+car.audio.idleRPM = IDLE_RPM_SOUND_FILE_NAME
+car.audio.engineStart = ENGINE_START_SOUND_FILE_NAME
+car.audio.idleEngineVolume = 0.6
+car.audio.minEnginePitch = 0.65
+car.audio.maxEnginePitch = 1.65
+car.audio.minEngineVolume = 0.1
+car.audio.maxEngineVolume = 0.75
+
+#각각 일반 색 변경,커스텀도색에 필요한 재질(Material)을 할당시킵니다. 해당 재질의 이름을 정확히 적어주세요.
+#여러가지 재질을 사용하고 싶으실 때는 재질1,재질2,재질3 같은 형식으로 적으시면 됩니다.
+car.custom.colorMaterialList = PAINT_MATERIAL_NAMES
+car.custom.customMaterialList = CUSTOM_TEXTURE_MATERIAL_NAMES
+
+#카메라의 높이, 위치를 지정합니다. 각각의 값을 0으로 두면 자동으로 계산됩니다.
+car.camera.hieght = 0
+car.camera.distance = 0
+#수동으로 적용시 추천값
+#승용차 : 0.5, 8
+#트럭, 버스 : 0.7, 12
+

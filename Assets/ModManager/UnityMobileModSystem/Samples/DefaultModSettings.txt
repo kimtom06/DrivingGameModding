@@ -1,0 +1,17 @@
+# SDGMOD 사용자 설정 파일
+# 형식: key=value
+# # 또는 ; 로 시작하는 줄은 주석입니다.
+# 숫자의 소수점은 마침표(.)를 사용하고 Vector3는 x,y,z로 작성합니다.
+
+mod.name={{MOD_NAME}}
+mod.author={{AUTHOR}}
+mod.category=custom
+
+object.displayName={{MOD_NAME}}
+object.enabled=true
+object.uniformScale=1.0
+spawn.position=0,0,0
+spawn.rotation=0,0,0
+
+audio.volume=1.0
+custom.note=

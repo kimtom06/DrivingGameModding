@@ -1,0 +1,10 @@
+<linker>
+  <!-- Optional UnityStandaloneFileBrowser, accessed through reflection. -->
+  <assembly fullname="Assembly-CSharp">
+    <type fullname="SFB.StandaloneFileBrowser" preserve="all" />
+    <type fullname="SFB.ExtensionFilter" preserve="all" />
+  </assembly>
+
+  <!-- Optional UnitySimpleFileBrowser UPM assembly, accessed through reflection. -->
+  <assembly fullname="SimpleFileBrowser.Runtime" preserve="all" />
+</linker>
