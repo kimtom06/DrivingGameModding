@@ -151,7 +151,7 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1611816031}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0.46257055}
+  m_AnchorMin: {x: 0, y: 0.91240966}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 20, y: 20}
@@ -547,7 +547,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 24593382}
   m_Direction: 2
   m_Value: 1
-  m_Size: 0.53742945
+  m_Size: 0.08759032
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -2175,8 +2175,8 @@ Transform:
   m_GameObject: {fileID: 743903273}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: -0.7071068, w: 0}
-  m_LocalPosition: {x: 0.042, y: -0.69, z: -0.171}
-  m_LocalScale: {x: 0.17799, y: 0.17799, z: 0.17799}
+  m_LocalPosition: {x: 0.08, y: -0.69, z: -0.171}
+  m_LocalScale: {x: 0.41868588, y: 0.41868588, z: 0.41868588}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -2797,8 +2797,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 32}
-  m_SizeDelta: {x: 526.37, y: 675.788}
+  m_AnchoredPosition: {x: 0, y: -96.001465}
+  m_SizeDelta: {x: 526.37, y: 4790.7812}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &983604921
 MonoBehaviour:
@@ -2833,7 +2833,10 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "\uBAA8\uB4DC \uC5D0\uB514\uD130 \uC124\uBA85\n\n\n\uC544\uC9C1 3D\uBAA8\uB378\uB9C1,
+  m_Text: "\uBAA8\uB4DC \uC5D0\uB514\uD130 \uC124\uBA85\n\uD574\uB2F9 \uC124\uBA85
+    \uD30C\uC77C\uC740 \uBAA8\uB4DC \uC5D0\uB514\uD130 \uC6F9\uC0AC\uC774\uD2B8\uC5D0\uC11C
+    \uB2E4\uC6B4\uB85C\uB4DC \uAC00\uB2A5\uD569\uB2C8\uB2E4.\n\uC6F9\uC0AC\uC774\uD2B8
+    \uC8FC\uC18C : https://drivinggamemod.lovable.app\n\n\uC544\uC9C1 3D\uBAA8\uB378\uB9C1,
     \uC601\uC5B4\uC5D0 \uC775\uC219\uD558\uC2DC\uC9C0 \uC54A\uC73C\uC2E0 \uBD84\uB4E4\uC740
     ChatGPT\uB4F1\uC758 AI\uC5D0\uAC8C \uB3C4\uC6C0\uC744 \uBC1B\uC73C\uC2DC\uB294\uAC83\uC744
     \uCD94\uCC9C\uB4DC\uB9BD\uB2C8\uB2E4.\n\n\n3D\uC6B4\uC804\uAC8C\uC7844.0 \uBAA8\uB4DC
@@ -2867,9 +2870,15 @@ MonoBehaviour:
     \uBB34\uAC8C\uC911\uC2EC\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4, \uC544\uC9C1 4\uAC1C
     \uCD08\uACFC \uBC14\uD034\uB294 \uC9C0\uC6D0\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.)\n\n\uCDA9\uB3CC\uCCB4
     : Collider\n(\uCDA9\uB3CC\uCCB4\uB294 Collider 1, Collider 2 \uD615\uC2DD\uC73C\uB85C
-    \uC5EC\uB7EC\uAC1C\uAC00 \uCD94\uAC00 \uAC00\uB2A5\uD569\uB2C8\uB2E4.)\n=================================\n\uBE44\uD544\uC218\uD56D\uBAA9
-    :\n\n1\uC778\uCE6D \uCE74\uBA54\uB77C \uC704\uCE58 : Cam_FirstPerson\n\uB0B4\uBD80
-    \uC0AC\uB78C \uBAA8\uB378\uC758 \uC549\uB294 \uC704\uCE58 : Person_Position\n(\uC758\uC790\uC758
+    \uC5EC\uB7EC\uAC1C\uAC00 \uCD94\uAC00 \uAC00\uB2A5\uD569\uB2C8\uB2E4. \uC790\uB3D9\uCC28\uC758
+    \uCC28\uCCB4\uB97C \uBCF5\uC0AC \uBD99\uC5EC\uB123\uC5B4\uC11C \uD574\uB2F9 \uC774\uB984\uC744
+    \uC0AC\uC6A9\uD558\uC154\uB3C4 \uB418\uACE0 \uCD5C\uC801\uD654\uB97C \uD558\uACE0
+    \uC2F6\uC73C\uC2DC\uBA74 \uC9C1\uC811 \uBE44\uC2B7\uD55C \uBAA8\uC591\uC73C\uB85C
+    \uB9CC\uB4E4\uC5B4 \uD574\uB2F9 \uC774\uB984\uC744 \uBD99\uC5EC\uC8FC\uC138\uC694.)\n=================================\n\uBE44\uD544\uC218\uD56D\uBAA9
+    :\n(\"\uC704\uCE58\"\uC778 \uC624\uBE0C\uC81D\uD2B8\uB4E4\uC740 \uBE48 \uC624\uBE0C\uC81D\uD2B8\uB97C
+    \uC0DD\uC131\uD574 \uC704\uCE58\uB97C \uC7A1\uC544\uC8FC\uC138\uC694.)\n\n1\uC778\uCE6D
+    \uCE74\uBA54\uB77C \uC704\uCE58 : Cam_FirstPerson\n\uB0B4\uBD80 \uC0AC\uB78C
+    \uBAA8\uB378\uC758 \uC549\uB294 \uC704\uCE58 : Person_Position\n(\uC758\uC790\uC758
     \uAC01\uC774 \uC788\uB294 \uBD80\uBD84\uC5D0 \uC704\uCE58\uD55C \uACF3\uC5D0
     \uC911\uC559\uC758 \uBE48 \uC624\uBE0C\uC81D\uD2B8\uB97C \uD574\uB2F9 \uC774\uB984\uC73C\uB85C
     \uC0DD\uC131\uD574\uC8FC\uC138\uC694.)\n\n\uC67C\uCABD \uC0AC\uC774\uB4DC\uBBF8\uB7EC
@@ -3256,8 +3265,8 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1526734529}
-  - {fileID: 1890984610}
   - {fileID: 2026665799}
+  - {fileID: 1890984610}
   - {fileID: 40914276}
   - {fileID: 962630763}
   m_Father: {fileID: 0}
@@ -3364,7 +3373,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 141206853}
   m_Direction: 0
   m_Value: 0
-  m_Size: 0.9999999
+  m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -4672,7 +4681,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 751.9126}
+  m_SizeDelta: {x: 0, y: 4613.5234}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &1740463140
 MonoBehaviour:
