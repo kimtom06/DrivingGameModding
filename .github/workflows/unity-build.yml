@@ -19,7 +19,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -46,6 +45,10 @@ jobs:
           buildName: ModdingEditor
           buildsPath: build
 
+      - name: Show Windows build files
+        run: |
+          find build -maxdepth 3 -type f
+
       - name: Create Windows ZIP
         run: |
           cd build
@@ -67,7 +70,6 @@ jobs:
     runs-on: macos-latest
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -95,10 +97,26 @@ jobs:
           buildsPath: build
           cacheUnityInstallationOnMac: true
 
+      - name: Show macOS build files
+        run: |
+          find build -maxdepth 4 -print
+
       - name: Create macOS ZIP
         run: |
-          cd build/StandaloneOSX
-          ditto -c -k --sequesterRsrc --keepParent ModdingEditor.app ../../ModdingEditor-macOS.zip
+          APP_PATH=$(find build -type d -name "ModdingEditor.app" -print -quit)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "ModdingEditor.app was not found!"
+            exit 1
+          fi
+
+          echo "Found app at: $APP_PATH"
+
+          ditto -c -k \
+            --sequesterRsrc \
+            --keepParent \
+            "$APP_PATH" \
+            ModdingEditor-macOS.zip
 
       - name: Upload macOS build
         uses: actions/upload-artifact@v4
@@ -121,21 +139,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Download builds
         uses: actions/download-artifact@v4
         with:
           path: release
 
-      - name: Show release files
-        run: find release -type f
+      - name: Show downloaded files
+        run: |
+          find release -type f
 
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" \
+          TAG="${{ github.ref_name }}"
+
+          if gh release view "$TAG" \
+            --repo "${{ github.repository }}" > /dev/null 2>&1
+          then
+            echo "Release $TAG already exists"
+          else
+            gh release create "$TAG" \
+              --repo "${{ github.repository }}" \
+              --title "Modding Editor $TAG" \
+              --generate-notes
+          fi
+
+          gh release upload "$TAG" \
             release/ModdingEditor-Windows/ModdingEditor-Windows.zip \
             release/ModdingEditor-macOS/ModdingEditor-macOS.zip \
-            --title "Modding Editor ${{ github.ref_name }}" \
-            --generate-notes
+            --repo "${{ github.repository }}" \
+            --clobber
