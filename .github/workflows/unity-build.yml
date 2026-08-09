@@ -8,26 +8,127 @@ on:
 permissions:
   contents: write
 
+
 jobs:
   build-release:
+
     name: Build Windows + macOS
-    runs-on: [self-hosted, macOS]
+
+    # Your own Mac
+    runs-on:
+      - self-hosted
+      - macOS
 
     steps:
+
+      # ============================================================
+      # PREPARE HOMEBREW + GIT LFS
+      # ============================================================
+
+      - name: Prepare Homebrew and Git LFS
+        shell: bash
+        run: |
+          echo "======================================"
+          echo "Preparing self-hosted Mac"
+          echo "======================================"
+
+          # Apple Silicon Homebrew
+          if [ -x "/opt/homebrew/bin/brew" ]; then
+
+            echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+            echo "/opt/homebrew/sbin" >> "$GITHUB_PATH"
+
+            export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+
+            BREW="/opt/homebrew/bin/brew"
+
+          # Intel Mac Homebrew
+          elif [ -x "/usr/local/bin/brew" ]; then
+
+            echo "/usr/local/bin" >> "$GITHUB_PATH"
+            echo "/usr/local/sbin" >> "$GITHUB_PATH"
+
+            export PATH="/usr/local/bin:/usr/local/sbin:$PATH"
+
+            BREW="/usr/local/bin/brew"
+
+          else
+
+            echo "ERROR: Homebrew was not found."
+            exit 1
+
+          fi
+
+
+          echo ""
+          echo "Homebrew:"
+          "$BREW" --version
+
+
+          # --------------------------------------------------------
+          # Git LFS
+          # --------------------------------------------------------
+
+          if ! command -v git-lfs >/dev/null 2>&1; then
+
+            echo ""
+            echo "Git LFS is not installed."
+            echo "Installing Git LFS..."
+
+            "$BREW" install git-lfs
+
+          fi
+
+
+          echo ""
+          echo "Git LFS:"
+          git lfs version
+
+          git lfs install --skip-repo
+
 
       # ============================================================
       # CHECKOUT
       # ============================================================
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
+
+          # Required for versioning: Tag
           fetch-depth: 0
+
+          # Download Git LFS files
           lfs: true
+
+          # IMPORTANT FOR SELF-HOSTED:
+          # Do not git clean the whole project workspace.
+          #
+          # This helps keep Unity Library between builds.
+          clean: false
 
 
       # ============================================================
-      # SHOW UNITY VERSION
+      # VERIFY LFS
+      # ============================================================
+
+      - name: Verify Git LFS
+        shell: bash
+        run: |
+          echo "======================================"
+          echo "Git LFS"
+          echo "======================================"
+
+          git lfs version
+          git lfs pull
+
+          echo ""
+          echo "LFS files:"
+          git lfs ls-files || true
+
+
+      # ============================================================
+      # BUILD INFORMATION
       # ============================================================
 
       - name: Show build information
@@ -36,13 +137,90 @@ jobs:
           echo "======================================"
           echo "Modding Editor Build"
           echo "======================================"
-          echo "Tag: ${{ github.ref_name }}"
-          echo "Runner: $RUNNER_NAME"
-          echo "OS: $RUNNER_OS"
-          echo "Architecture: $RUNNER_ARCH"
+
+          echo "Tag:"
+          echo "${{ github.ref_name }}"
+
           echo ""
-          echo "Unity project version:"
+          echo "Runner:"
+          echo "$RUNNER_NAME"
+
+          echo ""
+          echo "OS:"
+          echo "$RUNNER_OS"
+
+          echo ""
+          echo "Architecture:"
+          echo "$RUNNER_ARCH"
+
+          echo ""
+          echo "Workspace:"
+          echo "$GITHUB_WORKSPACE"
+
+          echo ""
+          echo "Unity Project Version:"
           cat ProjectSettings/ProjectVersion.txt
+
+
+      # ============================================================
+      # VERIFY UNITY INSTALLATION
+      # ============================================================
+
+      - name: Verify Unity 6000.0.75f1
+        shell: bash
+        run: |
+
+          UNITY_PATH="/Applications/Unity/Hub/Editor/6000.0.75f1/Unity.app/Contents/MacOS/Unity"
+
+          echo "======================================"
+          echo "Checking Unity"
+          echo "======================================"
+
+          if [ ! -f "$UNITY_PATH" ]; then
+
+            echo "ERROR:"
+            echo "Unity 6000.0.75f1 was not found:"
+            echo "$UNITY_PATH"
+
+            echo ""
+            echo "Installed Unity versions:"
+
+            ls -la "/Applications/Unity/Hub/Editor/" || true
+
+            exit 1
+
+          fi
+
+          echo "Unity found:"
+          echo "$UNITY_PATH"
+
+
+      # ============================================================
+      # REMOVE ONLY OLD BUILD OUTPUT
+      # ============================================================
+      #
+      # This does NOT clean your Mac.
+      #
+      # It only removes old generated build files inside this
+      # GitHub Actions workspace so an old EXE cannot accidentally
+      # be uploaded as a new release.
+      # ============================================================
+
+      - name: Prepare build folders
+        shell: bash
+        run: |
+
+          rm -rf build/windows
+          rm -rf build/macos
+
+          rm -rf release
+
+          rm -f ModdingEditor-Windows.zip
+          rm -f ModdingEditor-macOS.zip
+
+          mkdir -p build/windows
+          mkdir -p build/macos
+          mkdir -p release
 
 
       # ============================================================
@@ -50,76 +228,131 @@ jobs:
       # ============================================================
 
       - name: Build Windows
-        uses: game-ci/unity-builder@v4
+        uses: game-ci/unity-builder@v5
         with:
+
           unityVersion: 6000.0.75f1
+
           targetPlatform: StandaloneWindows64
 
           buildName: ModdingEditor
-          buildsPath: build
+
+          buildsPath: build/windows
 
           versioning: Tag
 
-          # IMPORTANT:
+          # ======================================================
+          # IMPORTANT
+          #
+          # Do NOT attempt GitHub/Unity account activation.
+          #
           # Use the Unity license already activated on this Mac.
+          # ======================================================
+
           skipActivation: true
 
 
       # ============================================================
-      # CHECK WINDOWS BUILD
+      # FIND WINDOWS EXE
       # ============================================================
 
-      - name: Find Windows executable
+      - name: Verify Windows build
         shell: bash
         run: |
+
           echo "======================================"
           echo "WINDOWS BUILD OUTPUT"
           echo "======================================"
 
-          find build -maxdepth 6 -print
+          find build/windows -maxdepth 7 -print
 
-          EXE_PATH=$(find build -type f -name "ModdingEditor.exe" -print -quit)
+
+          EXE_PATH=$(find build/windows \
+            -type f \
+            -name "ModdingEditor.exe" \
+            -print \
+            -quit)
+
 
           if [ -z "$EXE_PATH" ]; then
+
             echo ""
-            echo "ERROR: ModdingEditor.exe was not found!"
+            echo "ERROR:"
+            echo "ModdingEditor.exe was not found."
+
+            echo ""
+            echo "Available files:"
+
+            find build/windows -maxdepth 10 -print
+
             exit 1
+
           fi
 
+
           echo ""
-          echo "Windows executable found:"
+          echo "Windows EXE found:"
           echo "$EXE_PATH"
 
 
       # ============================================================
-      # ZIP WINDOWS BUILD
+      # CREATE WINDOWS ZIP
       # ============================================================
 
       - name: Create Windows ZIP
         shell: bash
         run: |
-          EXE_PATH=$(find build -type f -name "ModdingEditor.exe" -print -quit)
+
+          EXE_PATH=$(find build/windows \
+            -type f \
+            -name "ModdingEditor.exe" \
+            -print \
+            -quit)
+
 
           if [ -z "$EXE_PATH" ]; then
-            echo "ERROR: ModdingEditor.exe was not found."
+            echo "ERROR: ModdingEditor.exe not found."
             exit 1
           fi
 
-          BUILD_DIR=$(dirname "$EXE_PATH")
 
-          echo "Windows build directory:"
-          echo "$BUILD_DIR"
+          WINDOWS_BUILD_DIR=$(dirname "$EXE_PATH")
+
+
+          echo "======================================"
+          echo "Windows build directory"
+          echo "======================================"
+
+          echo "$WINDOWS_BUILD_DIR"
+
+
+          # Copy entire Windows build to release directory.
+          #
+          # EXE alone is NOT enough.
+          # UnityPlayer.dll, Data folder etc. are also required.
+
+          mkdir -p release/ModdingEditor-Windows
+
+
+          /usr/bin/ditto \
+            "$WINDOWS_BUILD_DIR" \
+            "release/ModdingEditor-Windows"
+
+
+          # ZIP it
 
           /usr/bin/ditto \
             -c \
             -k \
             --keepParent \
-            "$BUILD_DIR" \
-            "$GITHUB_WORKSPACE/ModdingEditor-Windows.zip"
+            "release/ModdingEditor-Windows" \
+            "ModdingEditor-Windows.zip"
+
 
           echo ""
-          echo "Windows ZIP created:"
-          ls -lh "$GITHUB_WORKSPACE/ModdingEditor-Windows.zip"
+          echo "Created Windows ZIP:"
+
+          ls -lh ModdingEditor-Windows.zip
 
 
       # ============================================================
@@ -127,59 +360,94 @@ jobs:
       # ============================================================
 
       - name: Build macOS
-        uses: game-ci/unity-builder@v4
+        uses: game-ci/unity-builder@v5
         with:
+
           unityVersion: 6000.0.75f1
+
           targetPlatform: StandaloneOSX
 
           buildName: ModdingEditor
-          buildsPath: build
+
+          buildsPath: build/macos
 
           versioning: Tag
 
-          # Use existing Unity Hub / Personal license.
           skipActivation: true
 
 
       # ============================================================
-      # CHECK MACOS BUILD
+      # FIND MAC APP
       # ============================================================
 
-      - name: Find macOS application
+      - name: Verify macOS build
         shell: bash
         run: |
+
           echo "======================================"
           echo "MACOS BUILD OUTPUT"
           echo "======================================"
 
-          find build -maxdepth 6 -print
+          find build/macos -maxdepth 7 -print
 
-          APP_PATH=$(find build -type d -name "ModdingEditor.app" -print -quit)
+
+          APP_PATH=$(find build/macos \
+            -type d \
+            -name "ModdingEditor.app" \
+            -print \
+            -quit)
+
 
           if [ -z "$APP_PATH" ]; then
+
             echo ""
-            echo "ERROR: ModdingEditor.app was not found!"
+            echo "ERROR:"
+            echo "ModdingEditor.app was not found."
+
+            echo ""
+            echo "Available files:"
+
+            find build/macos -maxdepth 10 -print
+
             exit 1
+
           fi
 
+
           echo ""
-          echo "macOS application found:"
+          echo "macOS app found:"
           echo "$APP_PATH"
 
 
       # ============================================================
-      # ZIP MACOS BUILD
+      # CREATE MACOS ZIP
       # ============================================================
 
       - name: Create macOS ZIP
         shell: bash
         run: |
-          APP_PATH=$(find build -type d -name "ModdingEditor.app" -print -quit)
+
+          APP_PATH=$(find build/macos \
+            -type d \
+            -name "ModdingEditor.app" \
+            -print \
+            -quit)
+
 
           if [ -z "$APP_PATH" ]; then
-            echo "ERROR: ModdingEditor.app was not found."
+            echo "ERROR: ModdingEditor.app not found."
             exit 1
           fi
+
+
+          echo "======================================"
+          echo "Creating macOS ZIP"
+          echo "======================================"
+
+          echo "$APP_PATH"
+
+
+          # ditto preserves the .app bundle structure and macOS metadata.
 
           /usr/bin/ditto \
             -c \
@@ -187,63 +455,62 @@ jobs:
             --sequesterRsrc \
             --keepParent \
             "$APP_PATH" \
-            "$GITHUB_WORKSPACE/ModdingEditor-macOS.zip"
+            "ModdingEditor-macOS.zip"
+
 
           echo ""
-          echo "macOS ZIP created:"
-          ls -lh "$GITHUB_WORKSPACE/ModdingEditor-macOS.zip"
+          echo "Created macOS ZIP:"
+
+          ls -lh ModdingEditor-macOS.zip
 
 
       # ============================================================
-      # CHECK BOTH RELEASE FILES
+      # VERIFY RELEASE FILES
       # ============================================================
 
       - name: Verify release files
         shell: bash
         run: |
+
           echo "======================================"
           echo "RELEASE FILES"
           echo "======================================"
 
+
           if [ ! -f "ModdingEditor-Windows.zip" ]; then
-            echo "ERROR: ModdingEditor-Windows.zip not found"
+            echo "ERROR: ModdingEditor-Windows.zip missing."
             exit 1
           fi
 
+
           if [ ! -f "ModdingEditor-macOS.zip" ]; then
-            echo "ERROR: ModdingEditor-macOS.zip not found"
+            echo "ERROR: ModdingEditor-macOS.zip missing."
             exit 1
           fi
+
 
           ls -lh ModdingEditor-Windows.zip
           ls -lh ModdingEditor-macOS.zip
 
 
       # ============================================================
-      # OPTIONAL ACTIONS ARTIFACT BACKUP
+      # CREATE / UPDATE GITHUB RELEASE
       # ============================================================
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ModdingEditor-${{ github.ref_name }}
-          path: |
-            ModdingEditor-Windows.zip
-            ModdingEditor-macOS.zip
-          if-no-files-found: error
-
-
-      # ============================================================
-      # CREATE GITHUB RELEASE
+      #
+      # v3 uses Node 24.
       # ============================================================
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          name: Modding Editor ${{ github.ref_name }}
+
           tag_name: ${{ github.ref_name }}
 
+          name: Modding Editor ${{ github.ref_name }}
+
           generate_release_notes: true
+
+          fail_on_unmatched_files: true
 
           files: |
             ModdingEditor-Windows.zip
