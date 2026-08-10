@@ -177,7 +177,8 @@ namespace MobileModSystem
                         ModAssetType.Audio,
                         manifest,
                         stagingDirectory,
-                        sourcePathToAssetId),
+                        sourcePathToAssetId,
+                        audioBinding.originalFileName),
                     playOnAwake = source.playOnAwake,
                     loop = source.loop,
                     volume = source.volume,
@@ -210,7 +211,8 @@ namespace MobileModSystem
             ModAssetType assetType,
             ModPackageManifest manifest,
             string stagingDirectory,
-            Dictionary<string, string> sourcePathToAssetId)
+            Dictionary<string, string> sourcePathToAssetId,
+            string originalFileNameOverride = null)
         {
             string normalizedPath = Path.GetFullPath(sourcePath);
             if (!File.Exists(normalizedPath))
@@ -236,7 +238,9 @@ namespace MobileModSystem
                 assetId = assetId,
                 assetType = assetType,
                 relativePath = relativePath,
-                originalFileName = Path.GetFileName(normalizedPath)
+                originalFileName = string.IsNullOrWhiteSpace(originalFileNameOverride)
+                    ? Path.GetFileName(normalizedPath)
+                    : Path.GetFileName(originalFileNameOverride)
             });
 
             sourcePathToAssetId.Add(normalizedPath, assetId);

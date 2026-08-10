@@ -172,7 +172,8 @@ namespace MobileModSystem
             bool loop = false,
             float volume = 1f,
             float spatialBlend = 0f,
-            bool copyIntoWorkspace = true)
+            bool copyIntoWorkspace = true,
+            string originalFileName = null)
         {
             if (ownerNode == null)
                 throw new ArgumentNullException(nameof(ownerNode));
@@ -196,7 +197,16 @@ namespace MobileModSystem
                 if (clip == null)
                     throw new InvalidDataException("AudioClip 생성에 실패했습니다: " + storedPath);
 
-                clip.name = Path.GetFileNameWithoutExtension(storedPath);
+                // 모드 패키지 내부에서는 에셋 파일명이 GUID로 바뀌므로,
+                // 실제 AudioClip.name은 패키지 manifest에 저장된 원래 파일명을 사용합니다.
+                string resolvedOriginalFileName = string.IsNullOrWhiteSpace(originalFileName)
+                    ? Path.GetFileName(sourcePath)
+                    : Path.GetFileName(originalFileName);
+
+                if (string.IsNullOrWhiteSpace(resolvedOriginalFileName))
+                    resolvedOriginalFileName = Path.GetFileName(storedPath);
+
+                clip.name = Path.GetFileNameWithoutExtension(resolvedOriginalFileName);
 
                 // 항상 새 AudioSource를 생성하여 기존 오디오를 덮어쓰지 않습니다.
                 AudioSource audioSource = ownerNode.AddComponent<AudioSource>();
@@ -209,6 +219,7 @@ namespace MobileModSystem
                 // RuntimeAudioBinding도 AudioSource마다 하나씩 생성합니다.
                 RuntimeAudioBinding binding = ownerNode.AddComponent<RuntimeAudioBinding>();
                 binding.sourceFilePath = storedPath;
+                binding.originalFileName = resolvedOriginalFileName;
                 binding.targetAudioSource = audioSource;
 
                 return audioSource;
@@ -223,7 +234,8 @@ namespace MobileModSystem
             bool loop = false,
             float volume = 1f,
             float spatialBlend = 0f,
-            bool copyIntoWorkspace = true)
+            bool copyIntoWorkspace = true,
+            string originalFileName = null)
         {
             AudioSource source = await ImportAudioSourceAsync(
                 sourcePath,
@@ -232,7 +244,8 @@ namespace MobileModSystem
                 loop,
                 volume,
                 spatialBlend,
-                copyIntoWorkspace);
+                copyIntoWorkspace,
+                originalFileName);
 
             return source.clip;
         }

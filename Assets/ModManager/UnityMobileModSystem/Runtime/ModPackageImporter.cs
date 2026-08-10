@@ -213,6 +213,13 @@ namespace MobileModSystem
                             assets,
                             extractDirectory);
 
+                        if (!assets.TryGetValue(audioRecord.assetId, out ModAssetRecord audioAsset))
+                            throw new InvalidDataException("오디오 에셋 정보를 찾을 수 없습니다: " + audioRecord.assetId);
+
+                        string originalAudioFileName = string.IsNullOrWhiteSpace(audioAsset.originalFileName)
+                            ? Path.GetFileName(audioPath)
+                            : Path.GetFileName(audioAsset.originalFileName);
+
                         AudioSource source = await assetImporter.ImportAudioSourceAsync(
                             audioPath,
                             nodes[record.id],
@@ -220,7 +227,8 @@ namespace MobileModSystem
                             audioRecord.loop,
                             audioRecord.volume,
                             audioRecord.spatialBlend,
-                            true);
+                            true,
+                            originalAudioFileName);
 
                         source.minDistance = audioRecord.minDistance;
                         source.maxDistance = audioRecord.maxDistance;
