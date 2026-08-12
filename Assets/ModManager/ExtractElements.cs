@@ -1,48 +1,62 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using MobileModSystem;
 
 public class ExtractElements : MonoBehaviour
 {
-    [Header("자동차 색 제질")]
-    public Material Paint;
-    public Material Wheel;
-    public Material Glass;
-    public Material Custom;
+    [Header("새 모드들이 생성되는 부모")]
+    [Tooltip("모드를 불러왔을 때 Environment 모델이 이 오브젝트의 자식으로 생성되도록 설정하세요.")]
+    public Transform ModContainer;
 
-    [Header("검색할 모델 루트")]
+    [Header("현재 검색할 모델")]
     public GameObject RootObject;
 
-    [Header("충돌체")]
+    [Tooltip("실행할 때 ModContainer의 가장 마지막 자식을 새 RootObject로 사용")]
+    public bool autoFindNewestRoot = true;
+
+
+    [Header("Colliders")]
     public List<GameObject> Colliders = new();
 
-    [Header("바퀴 메시")]
+    [Header("Wheels")]
     public GameObject Wheel_FL;
     public GameObject Wheel_FR;
-    public GameObject Wheel_RR;
     public GameObject Wheel_RL;
+    public GameObject Wheel_RR;
 
-    [Header("생성된 WheelCollider")]
-    public WheelCollider WheelCollider_FL;
-    public WheelCollider WheelCollider_FR;
-    public WheelCollider WheelCollider_RR;
-    public WheelCollider WheelCollider_RL;
-
-    [Header("WheelCollider 설정")]
-    [Min(0.01f)]
-    public float WheelRadiusMultiplier = 1f;
-
-    [Min(0f)]
-    public float WheelMass = 20f;
-
-    [Min(0f)]
-    public float SuspensionDistance = 0.2f;
-
-    [Header("핸들")]
+    [Header("Steering")]
     public GameObject SteeringWheel;
 
-    [Header("조명")]
+    [Header("Positions")]
+    public GameObject FPSCamPoint;
+    public GameObject Person_Position;
+
+    [Header("Mirrors")]
+    public GameObject MirrorLeft;
+    public GameObject MirrorRight;
+    public GameObject MirrorBack;
+
+    [Header("Other")]
+    public GameObject FuelPoint;
+
+    public List<GameObject> Exhaust = new();
+    public List<GameObject> Numberplate = new();
+
+    [Header("Doors")]
+    public GameObject Door_Left;
+    public GameObject Door_Right;
+
+    public GameObject Door_Fold;
+    public GameObject Door_Slide;
+
+    public GameObject BusDoor_Slide;
+    public GameObject BusDoor_FoldRight;
+    public GameObject BusDoor_FoldLeft;
+
+    public GameObject Trunk;
+
+
+    [Header("Lights")]
     public GameObject Light_Run;
     public GameObject Light_Brake;
     public GameObject Light_Head;
@@ -50,170 +64,195 @@ public class ExtractElements : MonoBehaviour
     public GameObject Light_Left;
     public GameObject Light_Right;
 
-    [Header("무게중심")]
+    [Header("COM")]
     public Transform COM;
 
 
-    public Rigidbody rb;
-    private RuntimeModTextConfig rt;
-
-    private const string GeneratedWheelColliderPrefix =
-        "Generated_WheelCollider_";
+    // =========================================================
+    // Context Menu / 일반 실행
+    // =========================================================
 
     [ContextMenu("Extract From Model")]
     public void ExtractFromModel()
     {
-        rt = RootObject.GetComponentInChildren<RuntimeModTextConfig>();
-        if (RootObject == null)
-        { 
+        GameObject newRoot = FindNewestRoot();
+
+        ExtractFromModel(newRoot);
+    }
+
+
+    // =========================================================
+    // 가장 권장하는 방법
+    //
+    // 새 모드를 불러온 직후:
+    //
+    // extractElements.ExtractFromModel(importedObject);
+    //
+    // 이렇게 직접 새 Root를 전달
+    // =========================================================
+
+    void Update()
+    {
+        ExtractFromModel(RootObject);
+    }
+    public void ExtractFromModel(GameObject newRoot)
+    {
+        // 중요:
+        // 이전 검색 결과를 무조건 먼저 제거
+        ClearAllData();
+
+        if (newRoot == null)
+        {
+            RootObject = null;
+
             Debug.LogError(
-                "RootObject가 설정되지 않았습니다.",
+                "새 Environment RootObject를 찾지 못했습니다.",
                 this
             );
 
             return;
         }
-        rb = RootObject.AddComponent<Rigidbody>();
-        rb.isKinematic = true;
 
-        float mass = 0;
-        if(rt.TryGetFloat("car.physics.mass",out mass)){
-            rb.mass = mass;
-        }else{
-            rb.mass = 1200;
-        }
-        
+        // 새 모드로 Root 교체
+        RootObject = newRoot;
 
-        // 이전에 자동 생성했던 WheelCollider 삭제
-        DeleteGeneratedWheelColliders();
-
-        // 기존 참조 초기화
-        ClearElements();
-
-        // 모델 요소 검색
-        ExtractElementRecursive(RootObject.transform);
-
-        // 찾아낸 바퀴 메시를 기준으로 WheelCollider 생성
-        GenerateWheelColliders();
 
         Debug.Log(
-            $"모델 요소 추출 완료\n" +
-            $"Colliders: {Colliders.Count}\n" +
-            $"Wheel FL: {GetObjectName(Wheel_FL)}\n" +
-            $"Wheel FR: {GetObjectName(Wheel_FR)}\n" +
-            $"Wheel RL: {GetObjectName(Wheel_RL)}\n" +
-            $"Wheel RR: {GetObjectName(Wheel_RR)}\n" +
-            $"WheelCollider FL: {GetWheelColliderName(WheelCollider_FL)}\n" +
-            $"WheelCollider FR: {GetWheelColliderName(WheelCollider_FR)}\n" +
-            $"WheelCollider RL: {GetWheelColliderName(WheelCollider_RL)}\n" +
-            $"WheelCollider RR: {GetWheelColliderName(WheelCollider_RR)}",
-            this
+            $"[ExtractElements] 새로운 Root 설정: {RootObject.name}",
+            RootObject
         );
+
+
+        // -------------------------------------------------
+        // 1차 검색
+        //
+        // Wheel_FL 등의 정확한 이름을 먼저 찾음
+        // -------------------------------------------------
+
+        SearchRecursive(
+            RootObject.transform,
+            true
+        );
+
+
+        // -------------------------------------------------
+        // 2차 검색
+        //
+        // 정확한 이름으로 못 찾은 경우
+        //
+        // Wheel_FL.001
+        // Wheel_FL_Mesh
+        // Door_Left_01
+        // 등의 이름도 검색
+        // -------------------------------------------------
+
+        SearchRecursive(
+            RootObject.transform,
+            false
+        );
+
+
+        PrintResult();
     }
 
-    private void ExtractElementRecursive(Transform target)
+
+    // =========================================================
+    // 새 Root 찾기
+    // =========================================================
+
+    private GameObject FindNewestRoot()
     {
-        MeshRenderer temp = target.GetComponent<MeshRenderer>();
-        if(temp != null){
-            string matname = "";
-            if(Paint == null && rt.TryGetString("car.custom.bodyPaintMaterail",out matname)){
-                Material[] mats = temp.sharedMaterials;
-                for(int i=0; i<mats.Length;i++){
-                    if(mats[i].name == matname){
-                        Paint = mats[i];
-                        break;
-                    }
-                }
-            }
+        if (autoFindNewestRoot &&
+            ModContainer != null)
+        {
+            // 새로 Instantiate된 오브젝트는 일반적으로
+            // hierarchy의 마지막 자식으로 들어감
 
+            for (int i = ModContainer.childCount - 1;
+                 i >= 0;
+                 i--)
+            {
+                Transform child =
+                    ModContainer.GetChild(i);
 
-            matname = "";
-            if(Wheel == null && rt.TryGetString("car.custom.wheelPaintMaterial",out matname)){
-                Material[] mats = temp.sharedMaterials;
-                for(int i=0; i<mats.Length;i++){
-                    if(mats[i].name == matname){
-                        Wheel = mats[i];
-                        break;
-                    }
-                }
-            }
+                if (child == null)
+                    continue;
 
+                // ExtractElements 자신은 제외
+                if (child == transform)
+                    continue;
 
-            matname = "";
-            if(Glass == null && rt.TryGetString("car.custom.glassPaintMaterial",out matname)){
-                Material[] mats = temp.sharedMaterials;
-                for(int i=0; i<mats.Length;i++){
-                    if(mats[i].name == matname){
-                        Glass = mats[i];
-                        break;
-                    }
-                }
-            }
-
-
-            matname = "";
-            if(Custom == null && rt.TryGetString("car.custom.customTextureMaterial",out matname)){
-                Material[] mats = temp.sharedMaterials;
-                for(int i=0; i<mats.Length;i++){
-                    if(mats[i].name == matname){
-                        Custom = mats[i];
-                        break;
-                    }
-                }
+                return child.gameObject;
             }
         }
 
-        // 자동 생성된 WheelCollider는 모델 검색 대상에서 제외
-        if (target.GetComponent<WheelCollider>() != null)
+
+        // 자동 검색을 사용하지 않거나
+        // Container에서 못 찾은 경우 현재 Root 사용
+
+        return RootObject;
+    }
+
+
+    // =========================================================
+    // 재귀 검색
+    // =========================================================
+
+    private void SearchRecursive(
+        Transform target,
+        bool exactOnly
+    )
+    {
+        if (target == null)
             return;
+
 
         string objectName = target.name;
 
-        /*
-         * 일반 충돌체
-         */
-        if (ContainsAny(
-                objectName,
-                "Collider",
-                "Collision"
-            ))
+
+        // =====================================================
+        // Collider
+        // =====================================================
+
+        if (!exactOnly)
         {
-            MeshRenderer meshRenderer =
-                target.GetComponent<MeshRenderer>();
-
-            if (meshRenderer != null)
-                meshRenderer.enabled = false;
-
-            MeshCollider meshCollider =
-                target.GetComponent<MeshCollider>();
-
-            if (meshCollider == null)
+            if (ContainsName(
+                    objectName,
+                    "Collider",
+                    "Collision"
+                ))
             {
-                meshCollider =
-                    target.gameObject.AddComponent<MeshCollider>();
+                AddUnique(
+                    Colliders,
+                    target.gameObject
+                );
             }
-
-            meshCollider.convex = true;
-
-            if (!Colliders.Contains(target.gameObject))
-                Colliders.Add(target.gameObject);
         }
 
-        /*
-         * 무게중심
-         */
+
+        // =====================================================
+        // COM
+        // =====================================================
+
         if (COM == null &&
-            ContainsAny(objectName, "COM"))
+            Matches(
+                objectName,
+                exactOnly,
+                "COM"
+            ))
         {
             COM = target;
         }
 
-        /*
-         * 바퀴
-         */
+
+        // =====================================================
+        // Wheels
+        // =====================================================
+
         if (Wheel_FL == null &&
-            ContainsAny(
+            Matches(
                 objectName,
+                exactOnly,
                 "Wheel_FL",
                 "WheelFL",
                 "Wheel_F_L",
@@ -223,64 +262,310 @@ public class ExtractElements : MonoBehaviour
         {
             Wheel_FL = target.gameObject;
         }
-        else if (Wheel_FR == null &&
-                 ContainsAny(
-                     objectName,
-                     "Wheel_FR",
-                     "WheelFR",
-                     "Wheel_F_R",
-                     "FrontRightWheel",
-                     "Front_Right_Wheel"
-                 ))
+
+
+        if (Wheel_FR == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Wheel_FR",
+                "WheelFR",
+                "Wheel_F_R",
+                "FrontRightWheel",
+                "Front_Right_Wheel"
+            ))
         {
             Wheel_FR = target.gameObject;
         }
-        else if (Wheel_RL == null &&
-                 ContainsAny(
-                     objectName,
-                     "Wheel_RL",
-                     "WheelRL",
-                     "Wheel_R_L",
-                     "RearLeftWheel",
-                     "Rear_Left_Wheel"
-                 ))
+
+
+        if (Wheel_RL == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Wheel_RL",
+                "WheelRL",
+                "Wheel_R_L",
+                "RearLeftWheel",
+                "Rear_Left_Wheel"
+            ))
         {
             Wheel_RL = target.gameObject;
         }
-        else if (Wheel_RR == null &&
-                 ContainsAny(
-                     objectName,
-                     "Wheel_RR",
-                     "WheelRR",
-                     "Wheel_R_R",
-                     "RearRightWheel",
-                     "Rear_Right_Wheel"
-                 ))
+
+
+        if (Wheel_RR == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Wheel_RR",
+                "WheelRR",
+                "Wheel_R_R",
+                "RearRightWheel",
+                "Rear_Right_Wheel"
+            ))
         {
             Wheel_RR = target.gameObject;
         }
 
-        /*
-         * 핸들
-         */
+
+        // =====================================================
+        // Steering
+        // =====================================================
+
         if (SteeringWheel == null &&
-            ContainsAny(
+            Matches(
                 objectName,
+                exactOnly,
                 "SteeringWheel",
                 "Steering_Wheel",
-                "SteerWheel",
-                "Handle"
+                "SteerWheel"
             ))
         {
             SteeringWheel = target.gameObject;
         }
 
-        /*
-         * 조명
-         */
-        if (Light_Run == null &&
-            ContainsAny(
+
+        // =====================================================
+        // First person camera
+        // =====================================================
+
+        if (FPSCamPoint == null &&
+            Matches(
                 objectName,
+                exactOnly,
+                "Cam_FirstPerson",
+                "CamFirstPerson",
+                "FirstPersonCamera",
+                "FPSCamPoint"
+            ))
+        {
+            FPSCamPoint = target.gameObject;
+        }
+
+
+        // =====================================================
+        // Person
+        // =====================================================
+
+        if (Person_Position == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Person_Position",
+                "PersonPosition"
+            ))
+        {
+            Person_Position = target.gameObject;
+        }
+
+
+        // =====================================================
+        // Mirrors
+        // =====================================================
+
+        if (MirrorLeft == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Mirror_Left",
+                "MirrorLeft"
+            ))
+        {
+            MirrorLeft = target.gameObject;
+        }
+
+
+        if (MirrorRight == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Mirror_Right",
+                "MirrorRight"
+            ))
+        {
+            MirrorRight = target.gameObject;
+        }
+
+
+        if (MirrorBack == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Mirror_Back",
+                "MirrorBack",
+                "RearViewMirrorPoint"
+            ))
+        {
+            MirrorBack = target.gameObject;
+        }
+
+
+        // =====================================================
+        // Fuel
+        // =====================================================
+
+        if (FuelPoint == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "FuelPoint",
+                "Fuel_Point",
+                "FuelPort"
+            ))
+        {
+            FuelPoint = target.gameObject;
+        }
+
+
+        // =====================================================
+        // Doors
+        // =====================================================
+
+        if (Door_Left == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Door_Left",
+                "DoorLeft"
+            ))
+        {
+            Door_Left = target.gameObject;
+        }
+
+
+        if (Door_Right == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Door_Right",
+                "DoorRight"
+            ))
+        {
+            Door_Right = target.gameObject;
+        }
+
+
+        if (Door_Fold == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Door_Fold",
+                "DoorFold",
+                "FoldingDoor"
+            ))
+        {
+            Door_Fold = target.gameObject;
+        }
+
+
+        if (Door_Slide == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Door_Slide",
+                "DoorSlide",
+                "SlidingDoor"
+            ))
+        {
+            Door_Slide = target.gameObject;
+        }
+
+
+        if (BusDoor_Slide == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "BusDoor_Slide",
+                "BusDoorSlide"
+            ))
+        {
+            BusDoor_Slide = target.gameObject;
+        }
+
+
+        if (BusDoor_FoldRight == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "BusDoor_FoldRight",
+                "BusDoorFoldRight"
+            ))
+        {
+            BusDoor_FoldRight =
+                target.gameObject;
+        }
+
+
+        if (BusDoor_FoldLeft == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "BusDoor_FoldLeft",
+                "BusDoorFoldLeft"
+            ))
+        {
+            BusDoor_FoldLeft =
+                target.gameObject;
+        }
+
+
+        if (Trunk == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Trunk",
+                "Door_Trunk",
+                "DoorTrunk",
+                "Boot"
+            ))
+        {
+            Trunk = target.gameObject;
+        }
+
+
+        // =====================================================
+        // Exhaust
+        // NumberPlate
+        //
+        // 여러 개 검색 가능
+        // =====================================================
+
+        if (MatchesListObject(
+                objectName,
+                exactOnly,
+                "Exhaust"
+            ))
+        {
+            AddUnique(
+                Exhaust,
+                target.gameObject
+            );
+        }
+
+
+        if (MatchesListObject(
+                objectName,
+                exactOnly,
+                "NumberPlate",
+                "Number_Plate"
+            ))
+        {
+            AddUnique(
+                Numberplate,
+                target.gameObject
+            );
+        }
+
+
+        // =====================================================
+        // Lights
+        // =====================================================
+
+        if (Light_Run == null &&
+            Matches(
+                objectName,
+                exactOnly,
                 "Light_Run",
                 "LightRun",
                 "RunningLight",
@@ -290,308 +575,203 @@ public class ExtractElements : MonoBehaviour
         {
             Light_Run = target.gameObject;
         }
-        else if (Light_Brake == null &&
-                 ContainsAny(
-                     objectName,
-                     "Light_Brake",
-                     "LightBrake",
-                     "BrakeLight",
-                     "StopLight"
-                 ))
+
+
+        if (Light_Brake == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Light_Brake",
+                "LightBrake",
+                "BrakeLight",
+                "StopLight"
+            ))
         {
             Light_Brake = target.gameObject;
         }
-        else if (Light_Head == null &&
-                 ContainsAny(
-                     objectName,
-                     "Light_Head",
-                     "LightHead",
-                     "HeadLight",
-                     "Headlamp"
-                 ))
+
+
+        if (Light_Head == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Light_Head",
+                "LightHead",
+                "HeadLight",
+                "Headlamp"
+            ))
         {
             Light_Head = target.gameObject;
         }
-        else if (Light_Rev == null &&
-                 ContainsAny(
-                     objectName,
-                     "Light_Rev",
-                     "LightRev",
-                     "ReverseLight",
-                     "BackupLight"
-                 ))
+
+
+        if (Light_Rev == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Light_Rev",
+                "LightRev",
+                "ReverseLight",
+                "BackupLight"
+            ))
         {
             Light_Rev = target.gameObject;
         }
-        else if (Light_Left == null &&
-                 ContainsAny(
-                     objectName,
-                     "Light_Left",
-                     "LightLeft",
-                     "LeftIndicator",
-                     "LeftTurnSignal",
-                     "Indicator_L"
-                 ))
+
+
+        if (Light_Left == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Light_Left",
+                "LightLeft",
+                "LeftIndicator",
+                "LeftTurnSignal",
+                "Indicator_L"
+            ))
         {
             Light_Left = target.gameObject;
         }
-        else if (Light_Right == null &&
-                 ContainsAny(
-                     objectName,
-                     "Light_Right",
-                     "LightRight",
-                     "RightIndicator",
-                     "RightTurnSignal",
-                     "Indicator_R"
-                 ))
+
+
+        if (Light_Right == null &&
+            Matches(
+                objectName,
+                exactOnly,
+                "Light_Right",
+                "LightRight",
+                "RightIndicator",
+                "RightTurnSignal",
+                "Indicator_R"
+            ))
         {
             Light_Right = target.gameObject;
         }
 
-        /*
-         * 모든 자식 검색
-         */
-        for (int i = 0; i < target.childCount; i++)
+
+        // =====================================================
+        // Children
+        // =====================================================
+
+        for (int i = 0;
+             i < target.childCount;
+             i++)
         {
-            ExtractElementRecursive(target.GetChild(i));
+            SearchRecursive(
+                target.GetChild(i),
+                exactOnly
+            );
         }
     }
 
-    private void GenerateWheelColliders()
-    {
-        WheelCollider_FL = CreateWheelCollider(
-            Wheel_FL,
-            "FL"
-        );
 
-        WheelCollider_FR = CreateWheelCollider(
-            Wheel_FR,
-            "FR"
-        );
+    // =========================================================
+    // 이름 비교
+    // =========================================================
 
-        WheelCollider_RL = CreateWheelCollider(
-            Wheel_RL,
-            "RL"
-        );
-
-        WheelCollider_RR = CreateWheelCollider(
-            Wheel_RR,
-            "RR"
-        );
-    }
-
-    private WheelCollider CreateWheelCollider(
-        GameObject wheelMesh,
-        string wheelName
+    private bool Matches(
+        string source,
+        bool exactOnly,
+        params string[] names
     )
     {
-        if (wheelMesh == null)
+        string normalizedSource =
+            Normalize(source);
+
+
+        for (int i = 0;
+             i < names.Length;
+             i++)
         {
-            Debug.LogWarning(
-                $"{wheelName} 바퀴 메시를 찾지 못했습니다.",
-                this
-            );
+            string target =
+                Normalize(names[i]);
 
-            return null;
-        }
 
-        if (!TryGetLocalRendererBounds(
-                wheelMesh.transform,
-                out Bounds wheelBounds
-            ))
-        {
-            Debug.LogWarning(
-                $"{wheelMesh.name}에서 Renderer를 찾지 못했습니다.",
-                wheelMesh
-            );
-
-            return null;
-        }
-
-        GameObject wheelColliderObject =
-            new GameObject(
-                GeneratedWheelColliderPrefix + wheelName
-            );
-
-        wheelColliderObject.layer = wheelMesh.layer;
-
-        Transform wheelTransform = wheelMesh.transform;
-        Transform wheelParent = wheelTransform.parent;
-
-        if (wheelParent == null)
-            wheelParent = RootObject.transform;
-
-        /*
-         * 바퀴 메시의 자식이 아닌 같은 부모의 별도 오브젝트로 생성합니다.
-         *
-         * 이렇게 해야 바퀴 메시가 회전해도 WheelCollider 오브젝트가
-         * 메시의 회전에 직접 끌려가지 않습니다.
-         */
-        wheelColliderObject.transform.SetParent(
-            wheelParent,
-            false
-        );
-
-        wheelColliderObject.transform.localPosition =
-            wheelTransform.localPosition;
-
-       // wheelColliderObject.transform.localRotation =
-          //  wheelTransform.localRotation;
-
-      //  wheelColliderObject.transform.localScale =
-         //   wheelTransform.localScale;
-
-        WheelCollider wheelCollider =
-            wheelColliderObject.AddComponent<WheelCollider>();
-
-        /*
-         * Renderer Bounds의 중심이 바퀴 오브젝트의 원점과 다를 경우
-         * WheelCollider.center로 보정합니다.
-         */
-        wheelCollider.center = wheelBounds.center;
-
-        /*
-         * 일반적인 자동차 바퀴는 로컬 X축이 바퀴 축이고,
-         * Y/Z 크기가 바퀴의 지름입니다.
-         */
-        float radiusFromY = wheelBounds.extents.y;
-        float radiusFromZ = wheelBounds.extents.z;
-
-        wheelCollider.radius =
-            Mathf.Max(radiusFromY, radiusFromZ) *
-            WheelRadiusMultiplier;
-
-        wheelCollider.mass = WheelMass;
-        wheelCollider.suspensionDistance =
-            SuspensionDistance;
-
-        Debug.Log(
-            $"{wheelName} WheelCollider 생성\n" +
-            $"Mesh: {wheelMesh.name}\n" +
-            $"Radius: {wheelCollider.radius:F3}\n" +
-            $"Center: {wheelCollider.center}",
-            wheelColliderObject
-        );
-
-        return wheelCollider;
-    }
-
-    private bool TryGetLocalRendererBounds(
-        Transform wheelTransform,
-        out Bounds localBounds
-    )
-    {
-        Renderer[] renderers =
-            wheelTransform.GetComponentsInChildren<Renderer>(
-                true
-            );
-
-        localBounds = new Bounds();
-
-        if (renderers.Length == 0)
-            return false;
-
-        bool hasBounds = false;
-
-        foreach (Renderer rendererComponent in renderers)
-        {
-            if (rendererComponent == null)
-                continue;
-
-            Bounds worldBounds = rendererComponent.bounds;
-
-            Vector3 center = worldBounds.center;
-            Vector3 extents = worldBounds.extents;
-
-            /*
-             * 월드 Bounds의 8개 꼭짓점을 바퀴의 로컬 좌표로 변환합니다.
-             */
-            for (int x = -1; x <= 1; x += 2)
-            {
-                for (int y = -1; y <= 1; y += 2)
-                {
-                    for (int z = -1; z <= 1; z += 2)
-                    {
-                        Vector3 worldPoint =
-                            center +
-                            Vector3.Scale(
-                                extents,
-                                new Vector3(x, y, z)
-                            );
-
-                        Vector3 localPoint =
-                            wheelTransform.InverseTransformPoint(
-                                worldPoint
-                            );
-
-                        if (!hasBounds)
-                        {
-                            localBounds =
-                                new Bounds(
-                                    localPoint,
-                                    Vector3.zero
-                                );
-
-                            hasBounds = true;
-                        }
-                        else
-                        {
-                            localBounds.Encapsulate(localPoint);
-                        }
-                    }
-                }
-            }
-        }
-
-        return hasBounds;
-    }
-
-    private void DeleteGeneratedWheelColliders()
-    {
-        WheelCollider[] existingWheelColliders =
-            RootObject.GetComponentsInChildren<WheelCollider>(
-                true
-            );
-
-        foreach (WheelCollider existing in existingWheelColliders)
-        {
-            if (existing == null)
-                continue;
-
-            if (!existing.gameObject.name.StartsWith(
-                    GeneratedWheelColliderPrefix,
-                    StringComparison.Ordinal
+            // 정확히 일치
+            if (string.Equals(
+                    normalizedSource,
+                    target,
+                    StringComparison.OrdinalIgnoreCase
                 ))
             {
-                continue;
+                return true;
             }
 
-            GameObject targetObject = existing.gameObject;
 
-            if (Application.isPlaying)
+            // 2차 검색에서는 suffix 허용
+            if (!exactOnly &&
+                normalizedSource.StartsWith(
+                    target,
+                    StringComparison.OrdinalIgnoreCase
+                ))
             {
-                targetObject.SetActive(false);
-                Destroy(targetObject);
-            }
-            else
-            {
-                DestroyImmediate(targetObject);
+                return true;
             }
         }
+
+
+        return false;
     }
 
-    private bool ContainsAny(
+
+    private bool MatchesListObject(
         string source,
-        params string[] keywords
+        bool exactOnly,
+        params string[] baseNames
     )
     {
-        if (string.IsNullOrEmpty(source))
-            return false;
+        string normalizedSource =
+            Normalize(source);
 
-        foreach (string keyword in keywords)
+
+        for (int i = 0;
+             i < baseNames.Length;
+             i++)
         {
-            if (source.IndexOf(
-                    keyword,
+            string baseName =
+                Normalize(baseNames[i]);
+
+
+            if (string.Equals(
+                    normalizedSource,
+                    baseName,
+                    StringComparison.OrdinalIgnoreCase
+                ))
+            {
+                return true;
+            }
+
+
+            if (!exactOnly &&
+                normalizedSource.StartsWith(
+                    baseName,
+                    StringComparison.OrdinalIgnoreCase
+                ))
+            {
+                return true;
+            }
+        }
+
+
+        return false;
+    }
+
+
+    private bool ContainsName(
+        string source,
+        params string[] names
+    )
+    {
+        string normalizedSource =
+            Normalize(source);
+
+
+        for (int i = 0;
+             i < names.Length;
+             i++)
+        {
+            if (normalizedSource.IndexOf(
+                    Normalize(names[i]),
                     StringComparison.OrdinalIgnoreCase
                 ) >= 0)
             {
@@ -599,24 +779,110 @@ public class ExtractElements : MonoBehaviour
             }
         }
 
+
         return false;
     }
 
-    private void ClearElements()
+
+    // =========================================================
+    // 이름 Normalize
+    // =========================================================
+
+    private string Normalize(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+
+        string result =
+            value.Trim();
+
+
+        // Runtime 생성 이름 제거
+        result = result.Replace(
+            "(Clone)",
+            ""
+        );
+
+        result = result.Replace(
+            "(Instance)",
+            ""
+        );
+
+
+        // GLTF / FBX 등에서 생길 수 있는 구분자 무시
+        result = result
+            .Replace(" ", "")
+            .Replace("_", "")
+            .Replace("-", "")
+            .Replace(".", "");
+
+
+        return result.Trim();
+    }
+
+
+    // =========================================================
+    // List 중복 방지
+    // =========================================================
+
+    private void AddUnique(
+        List<GameObject> list,
+        GameObject obj
+    )
+    {
+        if (list == null ||
+            obj == null)
+        {
+            return;
+        }
+
+
+        if (!list.Contains(obj))
+        {
+            list.Add(obj);
+        }
+    }
+
+
+    // =========================================================
+    // 이전 데이터 완전 제거
+    // =========================================================
+
+    private void ClearAllData()
     {
         Colliders.Clear();
 
         Wheel_FL = null;
         Wheel_FR = null;
-        Wheel_RR = null;
         Wheel_RL = null;
-
-        WheelCollider_FL = null;
-        WheelCollider_FR = null;
-        WheelCollider_RR = null;
-        WheelCollider_RL = null;
+        Wheel_RR = null;
 
         SteeringWheel = null;
+
+        FPSCamPoint = null;
+        Person_Position = null;
+
+        MirrorLeft = null;
+        MirrorRight = null;
+        MirrorBack = null;
+
+        FuelPoint = null;
+
+        Exhaust.Clear();
+        Numberplate.Clear();
+
+        Door_Left = null;
+        Door_Right = null;
+
+        Door_Fold = null;
+        Door_Slide = null;
+
+        BusDoor_Slide = null;
+        BusDoor_FoldRight = null;
+        BusDoor_FoldLeft = null;
+
+        Trunk = null;
 
         Light_Run = null;
         Light_Brake = null;
@@ -626,21 +892,60 @@ public class ExtractElements : MonoBehaviour
         Light_Right = null;
 
         COM = null;
+
+        // RootObject도 반드시 초기화
+        RootObject = null;
     }
 
-    private string GetObjectName(GameObject target)
+
+    // =========================================================
+    // Debug
+    // =========================================================
+
+    private void PrintResult()
     {
-        return target != null
-            ? target.name
-            : "없음";
+        Debug.Log(
+            "======= ExtractElements =======\n" +
+
+            $"Root = {GetName(RootObject)}\n" +
+
+            $"Wheel_FL = {GetName(Wheel_FL)}\n" +
+            $"Wheel_FR = {GetName(Wheel_FR)}\n" +
+            $"Wheel_RL = {GetName(Wheel_RL)}\n" +
+            $"Wheel_RR = {GetName(Wheel_RR)}\n" +
+
+            $"SteeringWheel = {GetName(SteeringWheel)}\n" +
+
+            $"FPSCamPoint = {GetName(FPSCamPoint)}\n" +
+            $"Person = {GetName(Person_Position)}\n" +
+
+            $"MirrorLeft = {GetName(MirrorLeft)}\n" +
+            $"MirrorRight = {GetName(MirrorRight)}\n" +
+            $"MirrorBack = {GetName(MirrorBack)}\n" +
+
+            $"FuelPoint = {GetName(FuelPoint)}\n" +
+
+            $"Exhaust = {Exhaust.Count}\n" +
+            $"NumberPlate = {Numberplate.Count}\n" +
+
+            $"DoorLeft = {GetName(Door_Left)}\n" +
+            $"DoorRight = {GetName(Door_Right)}\n" +
+
+            $"LightHead = {GetName(Light_Head)}\n" +
+            $"LightBrake = {GetName(Light_Brake)}\n" +
+
+            "===============================",
+            this
+        );
     }
 
-    private string GetWheelColliderName(
-        WheelCollider target
+
+    private string GetName(
+        GameObject obj
     )
     {
-        return target != null
-            ? target.gameObject.name
-            : "없음";
+        return obj != null
+            ? obj.name
+            : "NULL";
     }
 }

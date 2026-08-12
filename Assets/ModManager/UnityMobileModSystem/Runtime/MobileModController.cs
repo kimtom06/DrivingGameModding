@@ -62,6 +62,13 @@ namespace MobileModSystem
         [TextArea(10, 30)]
         public string defaultSettingsText;
 
+        [Header("Runtime Imported Mod")]
+        [Tooltip("Play Mode에서 .sdgmod 모드는 항상 하나만 유지합니다. 새 모드가 정상적으로 로드되면 기존 모드를 제거합니다.")]
+        public bool keepOnlyOneImportedMod = true;
+
+        [Tooltip("현재 런타임으로 불러온 모드 루트입니다. 새 모드가 성공적으로 로드되면 자동으로 교체됩니다.")]
+        public GameObject currentImportedModRoot;
+
         [Header("Recent Mod Cache")]
         [Tooltip("성공적으로 불러온 마지막 .sdgmod 파일을 앱 내부 저장소에 보관합니다.")]
         public bool saveLastImportedMod = true;
@@ -292,12 +299,23 @@ namespace MobileModSystem
 
                 try
                 {
-                    SetStatus("3D 모델 불러오는 중...");
-                    GameObject created = await assetImporter.ImportGlbAsync(path, buildRoot);
+                    if (buildRoot == null)
+                        throw new InvalidOperationException("buildRoot가 지정되지 않았습니다.");
+
+                    SetStatus("3D 모델 교체 중...");
+
+                    // buildRoot 아래에는 RuntimeModelBinding이 항상 하나만 남습니다.
+                    // 기존 모델이 있으면 모델 노드는 유지하고 내부 __Model만 새 GLB로 교체합니다.
+                    GameObject created = await assetImporter.ImportOrReplaceSingleGlbAsync(
+                        path,
+                        buildRoot,
+                        mainModelRoot,
+                        true);
+
                     mainModelRoot = created;
                     GetOrCreateAudioStorage(created);
                     onObjectCreated?.Invoke(created);
-                    SetStatus("3D 모델 불러오기 완료");
+                    SetStatus("3D 모델 교체 완료: " + created.name);
                 }
                 catch (Exception exception)
                 {
@@ -951,14 +969,33 @@ namespace MobileModSystem
 
             Transform importParent = await ResolveImportedModsParentForImportAsync();
 
+            // IMPORTANT:
+            // 새 모드를 먼저 완전히 생성합니다. ImportAsync가 실패하면 예외가 발생하고
+            // 기존 모드는 건드리지 않으므로 화면에 남아 있게 됩니다.
             GameObject imported = await packageImporter.ImportAsync(
                 packagePath,
                 importParent);
 
+            if (imported == null)
+                throw new InvalidOperationException("모드 패키지를 불러왔지만 생성된 루트 오브젝트가 없습니다.");
+
+            // 새 모드가 완전히 성공한 뒤에만 이전 런타임 모드를 제거합니다.
+            // Destroy는 프레임 끝에 처리되므로 SetActive(false)를 먼저 호출하여
+            // 같은 프레임에 이전 모델이 화면에 남는 현상도 막습니다.
+            if (keepOnlyOneImportedMod)
+                RemovePreviousImportedMods(importParent, imported);
+
+            currentImportedModRoot = imported;
+
+            // 이전 모드를 가리킬 수 있는 선택 참조는 새 모드로 교체합니다.
+            selectedTextureRenderer = null;
+
             RuntimeModelBinding importedModel =
                 imported.GetComponentInChildren<RuntimeModelBinding>(true);
-            if (importedModel != null)
-                mainModelRoot = importedModel.gameObject;
+
+            mainModelRoot = importedModel != null
+                ? importedModel.gameObject
+                : null;
 
             RuntimeModTextConfig importedConfig =
                 imported.GetComponent<RuntimeModTextConfig>();
@@ -970,6 +1007,49 @@ namespace MobileModSystem
 
             onObjectCreated?.Invoke(imported);
             return imported;
+        }
+
+        /// <summary>
+        /// importedModsParent 아래에서 새로 불러온 모드를 제외한 기존 모드 루트를 제거합니다.
+        /// RuntimeModPackageIdentity가 붙은 루트만 제거하므로 importedModsParent의 다른 씬 오브젝트는 건드리지 않습니다.
+        /// </summary>
+        private void RemovePreviousImportedMods(Transform importParent, GameObject keepRoot)
+        {
+            if (importParent == null || keepRoot == null)
+                return;
+
+            // 1) 현재 추적 중인 기존 모드를 우선 제거합니다.
+            if (currentImportedModRoot != null &&
+                currentImportedModRoot != keepRoot &&
+                currentImportedModRoot.transform.IsChildOf(importParent))
+            {
+                currentImportedModRoot.SetActive(false);
+                Destroy(currentImportedModRoot);
+            }
+
+            // 2) 이전 버전에서 여러 모드가 이미 누적된 Play Session도 정리합니다.
+            // ImportAsync가 생성한 실제 모드 루트에는 RuntimeModPackageIdentity가 있습니다.
+            RuntimeModPackageIdentity[] identities =
+                importParent.GetComponentsInChildren<RuntimeModPackageIdentity>(true);
+
+            foreach (RuntimeModPackageIdentity identity in identities)
+            {
+                if (identity == null)
+                    continue;
+
+                GameObject oldRoot = identity.gameObject;
+
+                if (oldRoot == keepRoot)
+                    continue;
+
+                // 다른 nested object를 실수로 삭제하지 않도록 importParent의 직계 자식인
+                // 패키지 루트만 대상으로 합니다.
+                if (oldRoot.transform.parent != importParent)
+                    continue;
+
+                oldRoot.SetActive(false);
+                Destroy(oldRoot);
+            }
         }
 
 

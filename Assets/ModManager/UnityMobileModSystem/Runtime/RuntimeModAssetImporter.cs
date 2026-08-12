@@ -23,7 +23,29 @@ namespace MobileModSystem
         [SerializeField]
         private bool repackOcclusionTexture = true;
 
+        /// <summary>
+        /// 공개 GLB Import API도 항상 parent 아래 모델을 하나만 유지합니다.
+        /// 기존 모델이 있으면 자동으로 교체됩니다.
+        /// </summary>
         public async Task<GameObject> ImportGlbAsync(
+            string pickedFilePath,
+            Transform parent,
+            string objectName = null,
+            bool copyIntoWorkspace = true)
+        {
+            GameObject result = await ImportOrReplaceSingleGlbAsync(
+                pickedFilePath,
+                parent,
+                null,
+                copyIntoWorkspace);
+
+            if (!string.IsNullOrWhiteSpace(objectName) && result != null)
+                result.name = objectName;
+
+            return result;
+        }
+
+        private async Task<GameObject> CreateNewGlbNodeAsync(
             string pickedFilePath,
             Transform parent,
             string objectName = null,
@@ -55,6 +77,83 @@ namespace MobileModSystem
             }
         }
 
+        /// <summary>
+        /// parent 아래의 3D 모델을 항상 하나만 유지합니다.
+        /// 기존 모델이 있으면 같은 모델 노드의 __Model 내용만 새 GLB로 교체하여
+        /// AudioStorage 같은 ModNode 자식은 유지합니다.
+        /// 여러 RuntimeModelBinding이 이미 존재하면 preferredExistingRoot 또는 마지막 모델만 남깁니다.
+        /// </summary>
+        public async Task<GameObject> ImportOrReplaceSingleGlbAsync(
+            string pickedFilePath,
+            Transform parent,
+            GameObject preferredExistingRoot = null,
+            bool copyIntoWorkspace = true)
+        {
+            if (parent == null)
+                throw new ArgumentNullException(nameof(parent));
+
+            ValidateExtension(pickedFilePath, ".glb");
+
+            RuntimeModelBinding[] existingModels =
+                parent.GetComponentsInChildren<RuntimeModelBinding>(true);
+
+            GameObject targetRoot = null;
+
+            if (preferredExistingRoot != null &&
+                IsSameOrChildOf(preferredExistingRoot.transform, parent) &&
+                preferredExistingRoot.GetComponent<RuntimeModelBinding>() != null)
+            {
+                targetRoot = preferredExistingRoot;
+            }
+            else if (existingModels.Length > 0)
+            {
+                // 기존 동작과 동일하게 가장 마지막 모델을 최신 모델로 취급합니다.
+                targetRoot = existingModels[existingModels.Length - 1].gameObject;
+            }
+
+            if (targetRoot == null)
+            {
+                return await CreateNewGlbNodeAsync(
+                    pickedFilePath,
+                    parent,
+                    null,
+                    copyIntoWorkspace);
+            }
+
+            // 선택된 최신 모델 외의 모든 모델을 제거합니다.
+            foreach (RuntimeModelBinding binding in existingModels)
+            {
+                if (binding == null || binding.gameObject == targetRoot)
+                    continue;
+
+                GameObject duplicateRoot = binding.gameObject;
+
+                // buildRoot 자체이거나 targetRoot의 조상이라면 오브젝트 전체를 지우면 안 됩니다.
+                if (duplicateRoot.transform == parent ||
+                    targetRoot.transform.IsChildOf(duplicateRoot.transform))
+                {
+                    RemoveModelFromNode(duplicateRoot, true);
+                }
+                else
+                {
+                    duplicateRoot.SetActive(false);
+                    Destroy(duplicateRoot);
+                }
+            }
+
+            // 기존 모델 노드는 유지하고 내부 GLB만 새 모델로 교체합니다.
+            await LoadGlbIntoNodeAsync(
+                pickedFilePath,
+                targetRoot,
+                copyIntoWorkspace);
+
+            string newName = Path.GetFileNameWithoutExtension(pickedFilePath);
+            if (!string.IsNullOrWhiteSpace(newName))
+                targetRoot.name = newName;
+
+            return targetRoot;
+        }
+
         public async Task LoadGlbIntoNodeAsync(
             string sourcePath,
             GameObject node,
@@ -76,8 +175,11 @@ namespace MobileModSystem
             if (!loaded)
                 throw new InvalidDataException("glTFast가 GLB 모델을 읽지 못했습니다: " + storedPath);
 
-            GameObject modelContainer = new GameObject("__Model");
+            // 새 모델을 먼저 임시 컨테이너에 완전히 생성한 뒤 기존 모델과 교체합니다.
+            // 새 GLB 로딩/생성 실패 시 기존 모델이 그대로 남도록 하기 위함입니다.
+            GameObject modelContainer = new GameObject("__Model_New");
             modelContainer.transform.SetParent(node.transform, false);
+            modelContainer.SetActive(false);
 
             bool instantiated = await gltf.InstantiateMainSceneAsync(modelContainer.transform);
             if (!instantiated)
@@ -111,11 +213,81 @@ namespace MobileModSystem
                     node);
             }
 
+            // 여기까지 성공했을 때만 기존 GLB 컨테이너와 오래된 텍스처 바인딩을 제거합니다.
+            RemoveGeneratedModelContainers(node, modelContainer);
+            RemoveTextureBindings(node);
+
+            modelContainer.name = "__Model";
+            modelContainer.SetActive(true);
+
             RuntimeModelBinding binding = node.GetComponent<RuntimeModelBinding>();
             if (binding == null)
                 binding = node.AddComponent<RuntimeModelBinding>();
 
             binding.sourceFilePath = storedPath;
+        }
+
+        /// <summary>
+        /// 지정한 ModNode의 실제 GLB 내용만 제거합니다.
+        /// removeBinding=true이면 RuntimeModelBinding도 제거합니다.
+        /// AudioStorage 같은 다른 ModNode 자식은 건드리지 않습니다.
+        /// </summary>
+        public void RemoveModelFromNode(GameObject node, bool removeBinding = true)
+        {
+            if (node == null)
+                return;
+
+            RemoveGeneratedModelContainers(node, null);
+            RemoveTextureBindings(node);
+
+            if (removeBinding)
+            {
+                RuntimeModelBinding binding = node.GetComponent<RuntimeModelBinding>();
+                if (binding != null)
+                    Destroy(binding);
+            }
+        }
+
+        private static bool IsSameOrChildOf(Transform candidate, Transform parent)
+        {
+            if (candidate == null || parent == null)
+                return false;
+
+            return candidate == parent || candidate.IsChildOf(parent);
+        }
+
+        private static void RemoveGeneratedModelContainers(
+            GameObject node,
+            GameObject keepContainer)
+        {
+            if (node == null)
+                return;
+
+            for (int i = node.transform.childCount - 1; i >= 0; i--)
+            {
+                Transform child = node.transform.GetChild(i);
+                if (child == null || child.gameObject == keepContainer)
+                    continue;
+
+                // RuntimeModAssetImporter가 생성한 GLB 전용 컨테이너만 제거합니다.
+                if (child.name == "__Model" || child.name.StartsWith("__Model_", StringComparison.Ordinal))
+                {
+                    child.gameObject.SetActive(false);
+                    Destroy(child.gameObject);
+                }
+            }
+        }
+
+        private static void RemoveTextureBindings(GameObject node)
+        {
+            RuntimeTextureBinding[] textureBindings =
+                node.GetComponents<RuntimeTextureBinding>();
+
+            foreach (RuntimeTextureBinding textureBinding in textureBindings)
+            {
+                if (textureBinding != null)
+                    Destroy(textureBinding);
+            }
         }
 
         public async Task<Texture2D> ImportTextureAsync(

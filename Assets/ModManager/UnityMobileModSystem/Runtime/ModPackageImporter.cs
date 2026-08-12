@@ -134,24 +134,61 @@ namespace MobileModSystem
                     config.EnsureDefault(manifest.displayName, manifest.author);
                 }
 
-                // 3단계: 모델을 먼저 생성합니다.
+                // 3단계: 패키지 안에 모델이 여러 개 있어도 최신 모델 하나만 생성합니다.
+                // 기존 MobileModController가 마지막 RuntimeModelBinding을 최신 모델로 사용했기 때문에
+                // manifest.nodes 순서에서 마지막 modelAssetId를 가진 노드를 선택합니다.
+                string selectedModelNodeId = null;
+                int modelRecordCount = 0;
+
                 foreach (ModNodeRecord record in manifest.nodes)
                 {
-                    if (string.IsNullOrWhiteSpace(record.modelAssetId))
+                    if (record == null || string.IsNullOrWhiteSpace(record.modelAssetId))
                         continue;
 
-                    string modelPath = ResolveAssetPath(
-                        record.modelAssetId,
-                        ModAssetType.ModelGlb,
-                        assets,
-                        extractDirectory);
-
-                    await assetImporter.LoadGlbIntoNodeAsync(modelPath, nodes[record.id], true);
+                    selectedModelNodeId = record.id;
+                    modelRecordCount++;
                 }
 
-                // 4단계: 모델 Renderer에 텍스처를 적용합니다.
+                if (modelRecordCount > 1)
+                {
+                    Debug.LogWarning(
+                        $"모드 패키지에 3D 모델이 {modelRecordCount}개 있습니다. " +
+                        "가장 마지막 모델 하나만 불러옵니다.",
+                        this);
+                }
+
+                if (!string.IsNullOrWhiteSpace(selectedModelNodeId))
+                {
+                    foreach (ModNodeRecord record in manifest.nodes)
+                    {
+                        if (record == null || record.id != selectedModelNodeId)
+                            continue;
+
+                        string modelPath = ResolveAssetPath(
+                            record.modelAssetId,
+                            ModAssetType.ModelGlb,
+                            assets,
+                            extractDirectory);
+
+                        await assetImporter.LoadGlbIntoNodeAsync(
+                            modelPath,
+                            nodes[record.id],
+                            true);
+
+                        break;
+                    }
+                }
+
+                // 4단계: 실제로 불러온 모델의 Renderer에만 텍스처를 적용합니다.
                 foreach (ModNodeRecord record in manifest.nodes)
                 {
+                    // 모델을 가진 노드 중 선택되지 않은 이전 모델은 텍스처도 복원하지 않습니다.
+                    if (!string.IsNullOrWhiteSpace(record.modelAssetId) &&
+                        record.id != selectedModelNodeId)
+                    {
+                        continue;
+                    }
+
                     GameObject node = nodes[record.id];
                     if (record.textures == null)
                         continue;
