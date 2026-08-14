@@ -47,8 +47,9 @@ car.audio.maxEngineVolume = 0.75
 car.custom.colorMaterialList = PAINT_MATERIAL_NAMES
 car.custom.customMaterialList = CUSTOM_TEXTURE_MATERIAL_NAMES
 
-#카메라의 높이, 위치를 지정합니다. 각각의 값을 0으로 두면 자동으로 계산됩니다.
-car.camera.hieght = 0
+#카메라의 높이, 위치를 지정합니다. 
+car.camera.hieght = 0.5
+#카메라 거리의 값을 0으로 두면 자동으로 계산됩니다.
 car.camera.distance = 0
 #수동으로 적용시 추천값
 #승용차 : 0.5, 8

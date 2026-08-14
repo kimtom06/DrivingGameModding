@@ -27,6 +27,13 @@ namespace MobileModSystem
                 Application.temporaryCachePath,
                 safeName + ModPackageConstants.Extension);
 
+            // The manifest/assets are still assembled as a normal ZIP internally,
+            // but the final .sdgmod written for users is an encrypted SDGMOD v2
+            // container. This keeps the existing manifest format fully compatible.
+            string temporaryZipPath = Path.Combine(
+                Application.temporaryCachePath,
+                "ModExportPayload_" + Guid.NewGuid().ToString("N") + ".zip");
+
             Directory.CreateDirectory(stagingDirectory);
 
             try
@@ -72,14 +79,18 @@ namespace MobileModSystem
                 string manifestPath = Path.Combine(stagingDirectory, ModPackageConstants.ManifestFileName);
                 File.WriteAllText(manifestPath, JsonUtility.ToJson(manifest, true));
 
-                if (File.Exists(outputPath))
-                    File.Delete(outputPath);
+                if (File.Exists(temporaryZipPath))
+                    File.Delete(temporaryZipPath);
 
-                using (FileStream fileStream = new FileStream(outputPath, FileMode.CreateNew))
+                using (FileStream fileStream = new FileStream(temporaryZipPath, FileMode.CreateNew))
                 using (ZipArchive archive = new ZipArchive(fileStream, ZipArchiveMode.Create))
                 {
                     AddDirectoryToZip(archive, stagingDirectory, stagingDirectory);
                 }
+
+                // SDGMOD v2: encrypt + authenticate the ZIP payload. Renaming the
+                // resulting .sdgmod to .zip will no longer expose the GLB/assets.
+                SdgModContainer.EncryptZipToSdgMod(temporaryZipPath, outputPath);
 
                 if (identity == null)
                     identity = root.AddComponent<RuntimeModPackageIdentity>();
@@ -95,6 +106,9 @@ namespace MobileModSystem
             {
                 if (Directory.Exists(stagingDirectory))
                     Directory.Delete(stagingDirectory, true);
+
+                if (File.Exists(temporaryZipPath))
+                    File.Delete(temporaryZipPath);
             }
         }
 

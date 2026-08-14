@@ -305,32 +305,74 @@ namespace MobileModSystem
             int entryCount = 0;
             long maxExtractedBytes = (long)maxExtractedSizeMb * 1024L * 1024L;
 
-            using (FileStream stream = File.OpenRead(packagePath))
-            using (ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Read))
+            string zipPath = packagePath;
+            string decryptedZipPath = null;
+
+            try
             {
-                foreach (ZipArchiveEntry entry in archive.Entries)
+                SdgModContainer.PackageKind packageKind =
+                    SdgModContainer.DetectPackageKind(packagePath);
+
+                switch (packageKind)
                 {
-                    entryCount++;
-                    if (entryCount > maxEntryCount)
-                        throw new InvalidDataException("모드 압축 파일의 항목 수가 너무 많습니다.");
+                    case SdgModContainer.PackageKind.EncryptedV2:
+                        decryptedZipPath = Path.Combine(
+                            Application.temporaryCachePath,
+                            "ModDecoded_" + Guid.NewGuid().ToString("N") + ".zip");
 
-                    extractedBytes += entry.Length;
-                    if (extractedBytes > maxExtractedBytes)
-                        throw new InvalidDataException("모드 압축 해제 용량이 제한을 초과했습니다.");
+                        SdgModContainer.DecryptSdgModToZip(
+                            packagePath,
+                            decryptedZipPath);
 
-                    if (string.IsNullOrEmpty(entry.Name))
-                        continue;
+                        zipPath = decryptedZipPath;
+                        break;
 
-                    string relative = entry.FullName.Replace('/', Path.DirectorySeparatorChar);
-                    string destinationPath = Path.GetFullPath(Path.Combine(destinationRoot, relative));
+                    case SdgModContainer.PackageKind.LegacyZip:
+                        // Backward compatibility: old .sdgmod files were plain ZIPs.
+                        zipPath = packagePath;
+                        break;
 
-                    if (!destinationPath.StartsWith(normalizedRoot, StringComparison.Ordinal))
-                        throw new InvalidDataException("허용되지 않은 압축 경로가 포함되어 있습니다.");
+                    default:
+                        throw new InvalidDataException(
+                            "지원하지 않는 .sdgmod 컨테이너입니다. " +
+                            "새 암호화 형식 또는 기존 ZIP 기반 모드만 지원합니다.");
+                }
 
-                    Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
-                    using (Stream input = entry.Open())
-                    using (FileStream output = new FileStream(destinationPath, FileMode.Create, FileAccess.Write))
-                        input.CopyTo(output);
+                using (FileStream stream = File.OpenRead(zipPath))
+                using (ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Read))
+                {
+                    foreach (ZipArchiveEntry entry in archive.Entries)
+                    {
+                        entryCount++;
+                        if (entryCount > maxEntryCount)
+                            throw new InvalidDataException("모드 압축 파일의 항목 수가 너무 많습니다.");
+
+                        extractedBytes += entry.Length;
+                        if (extractedBytes > maxExtractedBytes)
+                            throw new InvalidDataException("모드 압축 해제 용량이 제한을 초과했습니다.");
+
+                        if (string.IsNullOrEmpty(entry.Name))
+                            continue;
+
+                        string relative = entry.FullName.Replace('/', Path.DirectorySeparatorChar);
+                        string destinationPath = Path.GetFullPath(Path.Combine(destinationRoot, relative));
+
+                        if (!destinationPath.StartsWith(normalizedRoot, StringComparison.Ordinal))
+                            throw new InvalidDataException("허용되지 않은 압축 경로가 포함되어 있습니다.");
+
+                        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
+                        using (Stream input = entry.Open())
+                        using (FileStream output = new FileStream(destinationPath, FileMode.Create, FileAccess.Write))
+                            input.CopyTo(output);
+                    }
+                }
+            }
+            finally
+            {
+                if (!string.IsNullOrWhiteSpace(decryptedZipPath) &&
+                    File.Exists(decryptedZipPath))
+                {
+                    File.Delete(decryptedZipPath);
                 }
             }
         }
