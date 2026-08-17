@@ -1,0 +1,464 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Localization>
+  <Languages>
+    <Language code="ko" />
+    <Language code="en" />
+    <Language code="ja" />
+  </Languages>
+
+  <Rows>
+
+    <Row id="3eac139e5aca44bfbc9942c1da3ee640" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/audioScroll View /Text (Legacy)" type="UnityEngine.UI.Text">
+      <ko>New Text</ko>
+      <en>New Text</en>
+      <ja>新しいテキスト</ja>
+    </Row>
+
+    <Row id="2053f84020a4446da42ce660fe06be40" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Image/Scroll View/Viewport/Content/Text (Legacy)" type="UnityEngine.UI.Text">
+      <ko>모드 에디터 설명
+해당 설명 파일은 모드 에디터 웹사이트에서 다운로드 가능합니다.
+웹사이트 주소 : https://drivinggamemod.lovable.app
+
+아직 3D모델링, 영어에 익숙하시지 않으신 분들은 ChatGPT등의 AI에게 도움을 받으시는것을 추천드립니다.
+
+
+3D운전게임4.0 모드 에디터에 오신것을 환영합니다! 시작하기 전에 몇가지 필수사항이 있습니다.
+
+.glb 포맷이 내보내기가 가능한 3D모델링 소프트웨어 (ex 블랜더)
+
+모드의 용량은 다음과 같이 제한됩니다.
+메모리 4GB 이하의 기기 : 128MB
+메모리 4GB 초과 기기 : 512MB
+
+모드는 멀티플레이에서 같은 모드를 사용한 유저끼리만 보입니다.
+현재로써는 모드 차량으로는 미션모드가 불가능합니다.
+모드를 적용하시려면 메인화면의 크레딧 상점에서 모드차량을 35000크레딧에 구매해야 합니다.
+이후 차선택에 들어가서 추가된 모드차량을 선택한 후 모드 불러오기 버튼을 통해 모드를 적용하실 수 있습니다.
+자동차의 모델을 불러오기 전 방향은 에디터 바닥에 표시된 방향으로 수정해주세요.
+=================================
+중요!
+모드 제작 방법 :
+운전게임 모드 에디터는 자동차에 필요한 기능들을 모델링된 객체의 이름으로 판단합니다. 오브젝트의 기능과 그 오브젝트에 할당한 이름은 다음과 같습니다.
+
+필수항목  (해당 항목이 없으면 모드를 내보낼 수 없습니다.): 
+
+왼쪽 앞바퀴 : Wheel_FL
+오른쪽 앞바퀴 : Wheel_FR
+왼쪽 뒷바퀴 : Wheel_RL
+오른쪽 뒷바퀴 : Wheel_RR
+(바퀴의 중심(pivot)은 무게중심이어야 합니다, 아직 4개 초과 바퀴는 지원되지 않습니다.)
+
+충돌체 : Collider
+(충돌체는 Collider 1, Collider 2 형식으로 여러개가 추가 가능합니다. 자동차의 차체를 복사 붙여넣어서 해당 이름을 사용하셔도 되고 최적화를 하고 싶으시면 직접 비슷한 모양으로 만들어 해당 이름을 붙여주세요.)
+=================================
+비필수항목 :
+("위치"인 오브젝트들은 빈 오브젝트를 생성해 위치를 잡아주세요.)
+
+1인칭 카메라 위치 : Cam_FirstPerson
+내부 사람 모델의 앉는 위치 : Person_Position
+(의자의 각이 있는 부분에 위치한 곳에 중앙의 빈 오브젝트를 해당 이름으로 생성해주세요.)
+
+왼쪽 사이드미러 위치 : Mirror_Left
+오른쪽 사이드미러 위치 : Mirror_Right
+백미러 위치 : Mirror_Back
+
+주유구 위치 : FuelPoint
+
+
+켜진 조명에 할당할 오브젝트의 이름을 다음과 같이 설정해주세요. 해당 오브젝트들의 활성화, 비활성화를 통해 조명이 켜진 상태를 표현합니다.
+켜진 상태의 오브젝트들에는 "Emission"값, 색 아니면 텍스쳐를 설정하셔야 빛이 납니다 모드 에디터에서 얼마정도 밝기인지 확인 하세요.
+
+주간등 : Light_Run
+전조등 : Light_Head
+브레이크등 : Light_Brake
+후진등 : Light_Rev
+왼쪽 방향지시등 : Light_Left
+오른쪽 방향지시등 : Light_Right
+
+
+===블랜더 오브젝트 중심(pivot)의 설정 방법을 꼭 아셔야 문열림 같은 기능을 구현 가능합니다.===
+
+핸들 3D오브젝트 : SteeringWheel
+
+왼쪽 문 : Door_Left
+오른쪽 문 : Door_Right
+
+왼쪽 걸윙 문 : Door_Gul_Left
+오른쪽 걸윙 문 : Door_Gul_Right
+
+
+트렁크 : Door_Trunk
+(해당 오브젝트의 중심(pivot)은 오브젝트가 어느곳을 중심으로 회전할지 결정합니다.
+예시: 문짝의 경첩부분에 pivot을 설정해주세요)
+
+승합차,고속버스 슬라이딩도어(오른쪽) : Door_Slide
+
+시내버스폴딩도어 오른쪽 문 : BusDoor_FoldRight
+시내버스폴딩도어 왼쪽 문 : BusDoor_FoldLeft
+(두부분의 오브젝트로 만들어야 자동으로 할당됩니다. 중심(pivot)은 각각의 문짝의 가장 오른쪽에 오게 해주세요. 두 문짝이 닫힌 상태에서의 회전은 0,0,0 이어야 합니다.)
+
+시내버스 슬라이딩도어 : BusDoor_Slide
+
+
+배기구 위치 : Exhaust
+(배기구는 Exhaust 1, Exhaust 2 형식으로 여러개가 추가 가능합니다. 최대 4개까지 가능합니다.)
+
+번호판 위치 : NumberPlate
+(번호판은 NumberPlate 1, NumberPlate 2 형식으로 2개까지 추가 가능합니다. 각도를 변경하시면 번호판의 방향도 바뀝니다.)
+
+
+
+=================================
+추가적인 문의사항/오류제보는 3ddrivinggame@gmail.com으로 부탁드립니다.</ko>
+
+      <en>Mod Editor Guide
+This guide file can be downloaded from the Mod Editor website.
+Website : https://drivinggamemod.lovable.app
+
+If you are not yet familiar with 3D modeling or English, we recommend using AI tools such as ChatGPT for assistance.
+
+
+Welcome to the 3D Driving Game 4.0 Mod Editor! Before you begin, there are several important requirements.
+
+3D modeling software capable of exporting in the .glb format (e.g. Blender)
+
+Mod file sizes are limited as follows.
+Devices with 4GB of memory or less : 128MB
+Devices with more than 4GB of memory : 512MB
+
+In multiplayer, mods are only visible between users who are using the same mod.
+Currently, mission modes cannot be played with mod vehicles.
+To use mods, you must purchase the Mod Vehicle for 35,000 credits from the Credit Shop on the main screen.
+After that, open the vehicle selection screen, select the newly added Mod Vehicle, and use the Load Mod button to apply your mod.
+Before importing your vehicle model, make sure its orientation matches the direction shown on the floor of the editor.
+=================================
+IMPORTANT!
+How to create a mod :
+The Driving Game Mod Editor determines the required vehicle functions based on the names of the modeled objects. The object functions and the names that must be assigned to them are listed below.
+
+Required items (the mod cannot be exported if any of these are missing):
+
+Front left wheel : Wheel_FL
+Front right wheel : Wheel_FR
+Rear left wheel : Wheel_RL
+Rear right wheel : Wheel_RR
+(The pivot of each wheel must be located at its center of mass. Vehicles with more than 4 wheels are not currently supported.)
+
+Collider : Collider
+(Multiple colliders can be added using names such as Collider 1, Collider 2, and so on. You may duplicate the vehicle body and use it as a collider, or for better optimization, create simplified objects with similar shapes and assign these names.)
+=================================
+Optional items :
+(For objects marked as a "position", create an empty object and place it at the required location.)
+
+First-person camera position : Cam_FirstPerson
+Seated position of the interior character model : Person_Position
+(Create an empty object with this name at the center of the angled seating area of the seat.)
+
+Left side mirror position : Mirror_Left
+Right side mirror position : Mirror_Right
+Rear-view mirror position : Mirror_Back
+
+Fuel filler position : FuelPoint
+
+
+Set the names of the objects used for illuminated lights as shown below. The lights are represented by enabling and disabling these objects.
+Objects representing the illuminated state must have an "Emission" value, color, or texture configured so that they glow. Check the brightness in the Mod Editor.
+
+Daytime running light : Light_Run
+Headlight : Light_Head
+Brake light : Light_Brake
+Reverse light : Light_Rev
+Left turn signal : Light_Left
+Right turn signal : Light_Right
+
+
+===You must understand how to set an object's pivot in Blender to implement features such as opening doors.===
+
+Steering wheel 3D object : SteeringWheel
+
+Left door : Door_Left
+Right door : Door_Right
+
+Left gull-wing door : Door_Gul_Left
+Right gull-wing door : Door_Gul_Right
+
+
+Trunk : Door_Trunk
+(The object's pivot determines the point around which the object rotates.
+Example: Set the pivot at the hinge of the door.)
+
+Van / express bus sliding door (right) : Door_Slide
+
+City bus folding door - right panel : BusDoor_FoldRight
+City bus folding door - left panel : BusDoor_FoldLeft
+(The folding door must consist of two separate objects for automatic assignment. Set the pivot of each door panel to its far-right edge. When both doors are closed, their rotation must be 0,0,0.)
+
+City bus sliding door : BusDoor_Slide
+
+
+Exhaust position : Exhaust
+(Multiple exhausts can be added using names such as Exhaust 1, Exhaust 2, and so on. Up to 4 exhausts are supported.)
+
+License plate position : NumberPlate
+(Up to two license plates can be added using names such as NumberPlate 1 and NumberPlate 2. Changing the object's rotation will also change the direction of the license plate.)
+
+
+
+=================================
+For additional questions or bug reports, please contact 3ddrivinggame@gmail.com.</en>
+
+      <ja>Modエディター説明
+この説明ファイルはModエディターのウェブサイトからダウンロードできます。
+ウェブサイト : https://drivinggamemod.lovable.app
+
+3Dモデリングや英語にまだ慣れていない場合は、ChatGPTなどのAIを利用してサポートを受けることをおすすめします。
+
+
+3D運転ゲーム4.0 Modエディターへようこそ！開始する前に、いくつかの重要な条件があります。
+
+.glb形式でエクスポートできる3Dモデリングソフトウェア（例：Blender）
+
+Modの容量は以下のように制限されています。
+メモリ4GB以下の端末 : 128MB
+メモリ4GBを超える端末 : 512MB
+
+マルチプレイでは、同じModを使用しているユーザー同士でのみModが表示されます。
+現在、Mod車両ではミッションモードをプレイできません。
+Modを使用するには、メイン画面のクレジットショップでMod車両を35,000クレジットで購入する必要があります。
+その後、車両選択画面で追加されたMod車両を選択し、「Modを読み込む」ボタンからModを適用できます。
+車両モデルを読み込む前に、モデルの向きをエディターの床に表示されている方向に合わせてください。
+=================================
+重要！
+Modの作成方法 :
+運転ゲームModエディターは、モデリングされたオブジェクトの名前から車両に必要な機能を判別します。各オブジェクトの機能と割り当てる名前は以下の通りです。
+
+必須項目（これらが存在しない場合、Modをエクスポートできません）:
+
+左前輪 : Wheel_FL
+右前輪 : Wheel_FR
+左後輪 : Wheel_RL
+右後輪 : Wheel_RR
+（各ホイールの中心（pivot）は重心位置に設定してください。現在、4輪を超える車両には対応していません。）
+
+コライダー : Collider
+（Collider 1、Collider 2のような名前で複数のコライダーを追加できます。車体をコピーしてこの名前を使用することもできますが、最適化したい場合は、車体に近い簡略化された形状を作成してこの名前を付けてください。）
+=================================
+任意項目 :
+（「位置」と記載されている項目は、空のオブジェクトを作成して必要な場所に配置してください。）
+
+一人称カメラ位置 : Cam_FirstPerson
+車内人物モデルの着座位置 : Person_Position
+（シートの角度が付いている部分の中央に、この名前の空オブジェクトを配置してください。）
+
+左サイドミラー位置 : Mirror_Left
+右サイドミラー位置 : Mirror_Right
+ルームミラー位置 : Mirror_Back
+
+給油口位置 : FuelPoint
+
+
+点灯時に使用するオブジェクトの名前を以下のように設定してください。これらのオブジェクトを有効・無効にすることでライトの点灯状態を表現します。
+点灯状態のオブジェクトには、光るように「Emission」の値、色、またはテクスチャを設定する必要があります。Modエディターで明るさを確認してください。
+
+デイタイムランニングライト : Light_Run
+ヘッドライト : Light_Head
+ブレーキランプ : Light_Brake
+バックランプ : Light_Rev
+左ウインカー : Light_Left
+右ウインカー : Light_Right
+
+
+===ドアの開閉などの機能を実装するには、Blenderでオブジェクトの中心（pivot）を設定する方法を理解しておく必要があります。===
+
+ステアリングホイール3Dオブジェクト : SteeringWheel
+
+左ドア : Door_Left
+右ドア : Door_Right
+
+左ガルウィングドア : Door_Gul_Left
+右ガルウィングドア : Door_Gul_Right
+
+
+トランク : Door_Trunk
+（オブジェクトの中心（pivot）は、そのオブジェクトがどの位置を中心として回転するかを決定します。
+例：ドアのヒンジ部分にpivotを設定してください。）
+
+バン・高速バス用スライドドア（右） : Door_Slide
+
+路線バス折りたたみドア 右側 : BusDoor_FoldRight
+路線バス折りたたみドア 左側 : BusDoor_FoldLeft
+（自動で割り当てるためには、2つの別々のオブジェクトとして作成する必要があります。それぞれのドアのpivotを各ドアの最も右側に設定してください。2枚のドアが閉じた状態では、回転値を0,0,0にしてください。）
+
+路線バス スライドドア : BusDoor_Slide
+
+
+排気口位置 : Exhaust
+（Exhaust 1、Exhaust 2のような名前で複数追加できます。最大4個まで対応しています。）
+
+ナンバープレート位置 : NumberPlate
+（NumberPlate 1、NumberPlate 2のような名前で最大2個まで追加できます。オブジェクトの角度を変更すると、ナンバープレートの向きも変更されます。）
+
+
+
+=================================
+その他のお問い合わせや不具合報告は、3ddrivinggame@gmail.comまでお願いいたします。</ja>
+    </Row>
+
+    <Row id="649086a636a34abaa1f1755b99dd8e09" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/NoWheelText" type="UnityEngine.UI.Text">
+      <ko>바퀴 4개가 없어 내보내기가 불가능합니다.</ko>
+      <en>Cannot export because all 4 wheels are not present.</en>
+      <ja>4つのホイールが揃っていないため、エクスポートできません。</ja>
+    </Row>
+
+    <Row id="1794c3100abb4fe89072e9e029866780" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/NoWheelText (1)" type="UnityEngine.UI.Text">
+      <ko>충돌체 Collider가 없어 내보내기가 불가능합니다.</ko>
+      <en>Cannot export because a Collider is missing.</en>
+      <ja>Colliderが存在しないため、エクスポートできません。</ja>
+    </Row>
+
+    <Row id="47411c41b8ad4c61b058c23f071c7d03" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Rect/Button (Legacy) (1)/Text (Legacy)" type="UnityEngine.UI.Text">
+      <ko>사운드 불러오기</ko>
+      <en>Import Sound</en>
+      <ja>サウンドを読み込む</ja>
+    </Row>
+
+    <Row id="41c92828ea9c45439012dfd542636406" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Rect/Button (Legacy) (2)/Text (Legacy)" type="UnityEngine.UI.Text">
+      <ko>모드 내보내기</ko>
+      <en>Export Mod</en>
+      <ja>Modをエクスポート</ja>
+    </Row>
+
+    <Row id="7d6c81775a6f4c5aaef27e435befbb48" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Rect/Button (Legacy) (3)/Text (Legacy)" type="UnityEngine.UI.Text">
+      <ko>모드 불러오기</ko>
+      <en>Load Mod</en>
+      <ja>Modを読み込む</ja>
+    </Row>
+
+    <Row id="bab4d14ff79a421bbc1be5dc69a90da9" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Rect/Button (Legacy) (4)/Text (Legacy)" type="UnityEngine.UI.Text">
+      <ko>모델 참조 적용</ko>
+      <en>Apply Model References</en>
+      <ja>モデル参照を適用</ja>
+    </Row>
+
+    <Row id="5e91698a3d6541f4815fbed60134597c" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Rect/Button (Legacy) (5)/Text (Legacy)" type="UnityEngine.UI.Text">
+      <ko>모드 설정 편집</ko>
+      <en>Edit Mod Settings</en>
+      <ja>Mod設定を編集</ja>
+    </Row>
+
+    <Row id="822bf856441646b395bbff9130c958a5" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Rect/Button (Legacy) (6)/Text (Legacy)" type="UnityEngine.UI.Text">
+      <ko>도움말</ko>
+      <en>Help</en>
+      <ja>ヘルプ</ja>
+    </Row>
+
+    <Row id="f97696112d8c4f078226ddd8f0ffbbcc" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Rect/Button (Legacy) (7)/Text (Legacy)" type="UnityEngine.UI.Text">
+      <ko>사운드 목록/제거</ko>
+      <en>Sound List / Remove</en>
+      <ja>サウンド一覧 / 削除</ja>
+    </Row>
+
+    <Row id="80abc7576f854be78720d7e049995ee1" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Rect/Button (Legacy)/Text (Legacy)" type="UnityEngine.UI.Text">
+      <ko>모델 불러오기</ko>
+      <en>Import Model</en>
+      <ja>モデルを読み込む</ja>
+    </Row>
+
+    <Row id="0748a782a39a4cbeb25b739fab4be502" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Scroll View/Viewport/Content/InputField (TMP)/Text Area/Placeholder" type="TextMeshProUGUI">
+      <ko>Enter text...</ko>
+      <en>Enter text...</en>
+      <ja>テキストを入力...</ja>
+    </Row>
+
+    <Row id="64c3e12fc1454729bca38d612c7564e5" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Toggle (1)/Label" type="UnityEngine.UI.Text">
+      <ko>번호판 미리보기</ko>
+      <en>License Plate Preview</en>
+      <ja>ナンバープレートプレビュー</ja>
+    </Row>
+
+    <Row id="3e6a663373fd4eb49b34f6ae00dcdc52" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Toggle (2)/Label" type="UnityEngine.UI.Text">
+      <ko>번호판 보기</ko>
+      <en>Show License Plate</en>
+      <ja>ナンバープレートを表示</ja>
+    </Row>
+
+    <Row id="429b7905daa248ebb3af5456609db48d" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Toggle (3)/Label" type="UnityEngine.UI.Text">
+      <ko>배기구 보기</ko>
+      <en>Show Exhaust</en>
+      <ja>排気口を表示</ja>
+    </Row>
+
+    <Row id="fcabb7eba40949cea7ac3fbcf35cb54d" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Toggle (4)/Label" type="UnityEngine.UI.Text">
+      <ko>운전자 보기</ko>
+      <en>Show Driver</en>
+      <ja>ドライバーを表示</ja>
+    </Row>
+
+    <Row id="74d2f805f4204b8f8c6f043002a35243" source="Scene" path="Assets/Scenes/SampleScene.unity :: Canvas/Toggle/Label" type="UnityEngine.UI.Text">
+      <ko>충돌체 보기</ko>
+      <en>Show Colliders</en>
+      <ja>コライダーを表示</ja>
+    </Row>
+
+    <Row id="54fcdad469cb4d939d732dc0caab20d8" source="Scene" path="Assets/Scenes/SampleScene.unity :: CarPlateBaisic (1)/Text (TMP)" type="TextMeshPro">
+      <ko>1234</ko>
+      <en>1234</en>
+      <ja>1234</ja>
+    </Row>
+
+    <Row id="9705e6b088334e1e95c6f9c79c9ee996" source="Scene" path="Assets/Scenes/SampleScene.unity :: CarPlateBaisic/Text (TMP)" type="TextMeshPro">
+      <ko>1234</ko>
+      <en>1234</en>
+      <ja>1234</ja>
+    </Row>
+
+    <Row id="62ae4449a54d4df295994d27766de6df" source="Scene" path="Assets/Scenes/SampleScene.unity :: IngameDebugConsole/DebugLogPopup/NewErrorCount" type="TextMeshProUGUI">
+      <ko>0</ko>
+      <en>0</en>
+      <ja>0</ja>
+    </Row>
+
+    <Row id="5f737a9703db4ce5a332adfc078dc3c6" source="Scene" path="Assets/Scenes/SampleScene.unity :: IngameDebugConsole/DebugLogPopup/NewInfoCount" type="TextMeshProUGUI">
+      <ko>0</ko>
+      <en>0</en>
+      <ja>0</ja>
+    </Row>
+
+    <Row id="a9543a6e6b0f45cfaf731b583d698dbf" source="Scene" path="Assets/Scenes/SampleScene.unity :: IngameDebugConsole/DebugLogPopup/NewWarningCount" type="TextMeshProUGUI">
+      <ko>0</ko>
+      <en>0</en>
+      <ja>0</ja>
+    </Row>
+
+    <Row id="dcf7e5e0885e4200be3f9e682e12b667" source="Scene" path="Assets/Scenes/SampleScene.unity :: IngameDebugConsole/DebugLogWindow/Buttons/FilterErrorButton/ErrorCount" type="TextMeshProUGUI">
+      <ko>0</ko>
+      <en>0</en>
+      <ja>0</ja>
+    </Row>
+
+    <Row id="12bfee941d324d28994fae42c9c8e58c" source="Scene" path="Assets/Scenes/SampleScene.unity :: IngameDebugConsole/DebugLogWindow/Buttons/FilterLogButton/LogCount" type="TextMeshProUGUI">
+      <ko>0</ko>
+      <en>0</en>
+      <ja>0</ja>
+    </Row>
+
+    <Row id="ab620fda4c9b490a88bb3d10e4200934" source="Scene" path="Assets/Scenes/SampleScene.unity :: IngameDebugConsole/DebugLogWindow/Buttons/FilterWarningButton/WarningCount" type="TextMeshProUGUI">
+      <ko>0</ko>
+      <en>0</en>
+      <ja>0</ja>
+    </Row>
+
+    <Row id="9e5a01ebd28c4a5da2e54d0077982bf3" source="Scene" path="Assets/Scenes/SampleScene.unity :: IngameDebugConsole/DebugLogWindow/Buttons/SearchbarSlotTop/Searchbar/Text Area/Placeholder" type="TextMeshProUGUI">
+      <ko>Search...</ko>
+      <en>Search...</en>
+      <ja>検索...</ja>
+    </Row>
+
+    <Row id="9b29c709c35e451dbb1241d51f613f68" source="Scene" path="Assets/Scenes/SampleScene.unity :: IngameDebugConsole/DebugLogWindow/CommandInputField/Text Area/Placeholder" type="TextMeshProUGUI">
+      <ko>(type help for list of commands)</ko>
+      <en>(type help for list of commands)</en>
+      <ja>（コマンド一覧を表示するには help と入力）</ja>
+    </Row>
+
+  </Rows>
+</Localization>

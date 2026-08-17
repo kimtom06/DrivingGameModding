@@ -42,7 +42,8 @@ RenderSettings:
 --- !u!157 &4
 LightmapSettings:
   m_ObjectHideFlags: 0
-  serializedVersion: 12
+  serializedVersion: 13
+  m_BakeOnSceneLoad: 0
   m_GISettings:
     serializedVersion: 2
     m_BounceScale: 1
@@ -431,6 +432,7 @@ GameObject:
   - component: {fileID: 151148673}
   - component: {fileID: 151148671}
   - component: {fileID: 151148668}
+  - component: {fileID: 151148674}
   m_Layer: 0
   m_Name: TextMesh Pro - Caption
   m_TagString: Untagged
@@ -496,6 +498,7 @@ MonoBehaviour:
   m_VerticalAlignment: 256
   m_textAlignment: 65535
   m_characterSpacing: 2.7
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: -10
@@ -596,6 +599,21 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 7.69}
   m_SizeDelta: {x: 40, y: 5}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &151148674
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 151148667}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d84c0de93e639459ab460e537df11ca0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  localizationId: a9f0c2baed0c4ab1a13745c58767c38d
+  originalText: The Ultimate Text Solution for Unity
+  ignoreLocalization: 0
 --- !u!1 &176749293
 GameObject:
   m_ObjectHideFlags: 0
@@ -2942,6 +2960,7 @@ GameObject:
   - component: {fileID: 1746165351}
   - component: {fileID: 1746165349}
   - component: {fileID: 1746165347}
+  - component: {fileID: 1746165352}
   m_Layer: 0
   m_Name: TextMesh Pro - Text
   m_TagString: Untagged
@@ -3007,6 +3026,7 @@ MonoBehaviour:
   m_VerticalAlignment: 256
   m_textAlignment: 65535
   m_characterSpacing: 7
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: -10
@@ -3107,6 +3127,21 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 14.47}
   m_SizeDelta: {x: 40, y: 9.007265}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1746165352
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1746165346}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d84c0de93e639459ab460e537df11ca0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  localizationId: 96a16667a7194a53b7bcf803f3e7207d
+  originalText: <size=125%>T</size>ext<size=125%>M</size>esh<sup> <#50aaff>PRO!</color></sup>
+  ignoreLocalization: 0
 --- !u!1 &1888380058
 GameObject:
   m_ObjectHideFlags: 0
