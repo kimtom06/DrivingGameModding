@@ -9,7 +9,7 @@ mod.name= MOD_NAME
 mod.author= AUTHOR
 
 #자동차의 내부 핸들 모델이 돌아가야 하는 x,y,z축 방향백터를 나타냅니다.
-car.wheel.steeringWheelRotation = 0,-1,0
+car.wheel.steeringWheelRotation = 0,0,1
 
 #자동차의 바퀴 조향,서스팬션거리를 결정하는 변수입니다.
 car.wheel.maxSteerAngle = 40
