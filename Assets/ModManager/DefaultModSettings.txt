@@ -30,6 +30,7 @@ car.engine.backFire = false
 car.engine.booster = false
 car.engine.reverseBeep = false
 car.engine.airBrake = false
+car.engine.Electric = false;
 
 
 #엔진 소리를 불러온 후 해당 오디오의 이름을 확장자를 제거하고 아래에 적어주세요.

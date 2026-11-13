@@ -2,6 +2,11 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using GLTFast;
+using Material = UnityEngine.Material;
+using MaterialBase = GLTFast.Schema.MaterialBase;
+using TextureInfoBase = GLTFast.Schema.TextureInfoBase;
+using Object = UnityEngine.Object;
 
 namespace MobileModSystem
 {
@@ -80,7 +85,6 @@ namespace MobileModSystem
         };
 
         private const float EmissionEpsilon = 0.0001f;
-        private const float MinimumEmissionExposure = 1f;
 
         private static readonly string[] AlphaCutoffProperties =
         {
@@ -170,6 +174,22 @@ namespace MobileModSystem
                     targetRenderer.sharedMaterials = destinationMaterials;
             }
 
+            // If a legacy caller still invokes ConvertHierarchy, attach ownership
+            // for all newly-created materials and packed textures. Otherwise they
+            // can survive forever in native memory after the model is destroyed.
+            if (convertedCount > 0)
+            {
+                var lifetime = hierarchyRoot.GetComponent<RuntimeConvertedMaterialLifetime>();
+                if (lifetime == null)
+                    lifetime = hierarchyRoot.AddComponent<RuntimeConvertedMaterialLifetime>();
+                foreach (var material in convertedMaterials.Values)
+                    lifetime.Own(material);
+                foreach (var texture in packedMetallicMaps.Values)
+                    lifetime.Own(texture);
+                foreach (var texture in packedOcclusionMaps.Values)
+                    lifetime.Own(texture);
+            }
+
             return convertedCount;
         }
 
@@ -183,7 +203,7 @@ namespace MobileModSystem
         {
             Material destination = new Material(standardShader)
             {
-                name = source.name + "_Standard"
+                name = source.name
             };
 
             Texture baseTexture = FindTexture(source, BaseTextureProperties, out string baseTextureProperty);
@@ -309,23 +329,6 @@ namespace MobileModSystem
                 emissionColor.b *= emissionStrength;
                 emissionColor.a = 1f;
 
-                // HDR intensity 0 means 1x brightness. Force at least +1 stop
-                // so Unity's Inspector displays a positive intensity value.
-                float minimumLinearIntensity =
-                    Mathf.Pow(2f, MinimumEmissionExposure);
-
-                float maximumRgb = GetMaximumRgb(emissionColor);
-                if (maximumRgb < minimumLinearIntensity)
-                {
-                    float multiplier =
-                        minimumLinearIntensity /
-                        Mathf.Max(maximumRgb, EmissionEpsilon);
-
-                    emissionColor.r *= multiplier;
-                    emissionColor.g *= multiplier;
-                    emissionColor.b *= multiplier;
-                }
-
                 destination.SetColor("_EmissionColor", emissionColor);
                 destination.EnableKeyword("_EMISSION");
                 destination.globalIlluminationFlags =
@@ -435,11 +438,11 @@ namespace MobileModSystem
                 true,
                 true)
             {
-                name = source.name + "_StandardMetallicGloss"
+                name = source.name
             };
 
             result.SetPixels32(pixels);
-            result.Apply(true, false);
+            result.Apply(true, true);
             UnityEngine.Object.Destroy(readable);
             return result;
         }
@@ -462,11 +465,11 @@ namespace MobileModSystem
                 true,
                 true)
             {
-                name = source.name + "_StandardOcclusion"
+                name = source.name
             };
 
             result.SetPixels32(pixels);
-            result.Apply(true, false);
+            result.Apply(true, true);
             UnityEngine.Object.Destroy(readable);
             return result;
         }
@@ -631,6 +634,246 @@ namespace MobileModSystem
                     continue;
 
                 material.SetTextureScale(property, Vector2.one);
+            }
+        }
+
+        // NEW: direct generation from glTF schema (bypasses glTF PBR shader materials)
+        internal static void ValidateShader(Shader standardShader)
+        {
+            if (standardShader == null) throw new InvalidOperationException(
+                "Built-in Standard shader is not assigned. Set standardShader on RuntimeModAssetImporter.");
+            if (!standardShader.isSupported) throw new NotSupportedException(
+                "Built-in Standard shader is not supported by this render pipeline. For URP use a URP Lit generator.");
+        }
+
+        /// <summary>glTFast custom generator calls this DURING GLB loading.</summary>
+        internal static Material GenerateDirect(
+            MaterialBase gltfMaterial, IGltfReadable gltf, Shader standardShader,
+            bool repackMetallicRoughnessTexture, bool repackOcclusionTexture,
+            Func<Texture, float, float, bool, Texture2D> metallicPacker,
+            Func<Texture, float, float, bool, Texture2D> specularPacker,
+            Func<Texture, Texture2D> occlusionPacker)
+        {
+            ValidateShader(standardShader);
+            Material result = new Material(standardShader)
+            {
+                name = string.IsNullOrEmpty(gltfMaterial.name) ? "Imported Standard" : gltfMaterial.name
+            };
+
+            var pbr = gltfMaterial.PbrMetallicRoughness;
+            var specGloss = gltfMaterial.Extensions?.KHR_materials_pbrSpecularGlossiness;
+            Color color = specGloss != null ? specGloss.DiffuseColor : pbr != null ? pbr.BaseColor : Color.white;
+            TextureInfoBase albedoInfo = specGloss != null ? specGloss.diffuseTexture : pbr?.BaseColorTexture;
+            SetTexture(result, "_MainTex", albedoInfo, gltf);
+            result.SetColor("_Color", color);
+
+            // If glTF uses one packed ORM image, reuse ONE generated Standard
+            // metallic/smoothness/AO texture instead of allocating a second AO map.
+            var aoInfo = gltfMaterial.OcclusionTexture;
+            Texture2D aoSource = GetTexture(gltf, aoInfo);
+            Texture2D sharedPackedAoMap = null;
+
+            // For Standard metallic setup, bake glTF factors into the packed texture.
+            // Otherwise Unity would not reproduce (1 - green * roughnessFactor).
+            if (specGloss != null)
+            {
+                Color spec = specGloss.SpecularColor;
+                float approximateMetal = Mathf.Clamp01((Mathf.Max(spec.r, Mathf.Max(spec.g, spec.b)) - 0.04f) / 0.96f);
+                result.SetFloat("_Metallic", approximateMetal);
+                result.SetFloat("_Glossiness", Mathf.Clamp01(specGloss.glossinessFactor));
+                TextureInfoBase packedInfo = specGloss.specularGlossinessTexture;
+                Texture2D source = GetTexture(gltf, packedInfo);
+                if (source != null && repackMetallicRoughnessTexture)
+                {
+                    bool shareAo = aoSource != null && aoInfo.index == packedInfo.index && repackOcclusionTexture;
+                    Texture2D packed = specularPacker(source, approximateMetal, specGloss.glossinessFactor, shareAo);
+                    SetupPackedMap(result, packedInfo, gltf, packed);
+                    if (shareAo) sharedPackedAoMap = packed;
+                }
+            }
+            else
+            {
+                float metallic = pbr != null ? Mathf.Clamp01(pbr.metallicFactor) : 1f;
+                float roughness = pbr != null ? Mathf.Clamp01(pbr.roughnessFactor) : 1f;
+                result.SetFloat("_Metallic", metallic);
+                result.SetFloat("_Glossiness", 1f - roughness);
+                TextureInfoBase packedInfo = pbr?.MetallicRoughnessTexture;
+                Texture2D source = GetTexture(gltf, packedInfo);
+                if (source != null && repackMetallicRoughnessTexture)
+                {
+                    bool shareAo = aoSource != null && aoInfo.index == packedInfo.index && repackOcclusionTexture;
+                    Texture2D packed = metallicPacker(source, metallic, roughness, shareAo);
+                    SetupPackedMap(result, packedInfo, gltf, packed);
+                    if (shareAo) sharedPackedAoMap = packed;
+                }
+            }
+
+            var normalInfo = gltfMaterial.NormalTexture;
+            if (SetTexture(result, "_BumpMap", normalInfo, gltf))
+            {
+                result.SetFloat("_BumpScale", normalInfo.scale);
+                result.EnableKeyword("_NORMALMAP");
+            }
+
+            if (aoSource != null)
+            {
+                Texture aoMap = sharedPackedAoMap != null
+                    ? sharedPackedAoMap
+                    : repackOcclusionTexture ? occlusionPacker(aoSource) : aoSource;
+                result.SetTexture("_OcclusionMap", aoMap);
+                SetUvTransform(result, "_OcclusionMap", aoInfo, gltf);
+                result.SetFloat("_OcclusionStrength", Mathf.Clamp01(aoInfo.strength));
+            }
+
+            TextureInfoBase emissiveInfo = gltfMaterial.EmissiveTexture;
+            bool hasEmissiveMap = SetTexture(result, "_EmissionMap", emissiveInfo, gltf);
+            Color emissive = gltfMaterial.Emissive;
+            bool hasEmission = hasEmissiveMap || emissive.maxColorComponent > 0.0001f;
+            if (hasEmission)
+            {
+                // glTF: an emission map with a black emissiveFactor is intentionally black.
+                result.SetColor("_EmissionColor", emissive);
+                result.EnableKeyword("_EMISSION");
+                result.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            }
+            else
+            {
+                result.SetColor("_EmissionColor", Color.black);
+                result.DisableKeyword("_EMISSION");
+                result.globalIlluminationFlags = MaterialGlobalIlluminationFlags.EmissiveIsBlack;
+            }
+
+            result.SetInt("_Cull", gltfMaterial.doubleSided ? (int)CullMode.Off : (int)CullMode.Back);
+            int mode = gltfMaterial.GetAlphaMode() == MaterialBase.AlphaMode.Mask ? 1 :
+                       gltfMaterial.GetAlphaMode() == MaterialBase.AlphaMode.Blend ? 2 : 0;
+            SetSurfaceMode(result, mode, gltfMaterial.alphaCutoff);
+            return result;
+        }
+
+        private static void SetupPackedMap(Material material, TextureInfoBase sourceInfo, IGltfReadable gltf, Texture2D packed)
+        {
+            material.SetTexture("_MetallicGlossMap", packed);
+            SetUvTransform(material, "_MetallicGlossMap", sourceInfo, gltf);
+            // Factors are already in the red and alpha channels.
+            material.SetFloat("_Metallic", 1f);
+            material.SetFloat("_GlossMapScale", 1f);
+            material.EnableKeyword("_METALLICGLOSSMAP");
+        }
+
+        private static bool SetTexture(Material material, string property, TextureInfoBase info, IGltfReadable gltf)
+        {
+            Texture2D texture = GetTexture(gltf, info);
+            if (texture == null) return false;
+            material.SetTexture(property, texture);
+            SetUvTransform(material, property, info, gltf);
+            return true;
+        }
+
+        private static Texture2D GetTexture(IGltfReadable gltf, TextureInfoBase info)
+        {
+            return info != null && info.index >= 0 && info.index < gltf.TextureCount
+                ? gltf.GetTexture(info.index) : null;
+        }
+
+        private static void SetUvTransform(Material material, string property, TextureInfoBase info, IGltfReadable gltf)
+        {
+            if (info == null) return;
+            var transform = info.Extensions?.KHR_texture_transform;
+            Vector2 scale = Vector2.one;
+            Vector2 offset = Vector2.zero;
+            if (transform != null)
+            {
+                if (transform.scale != null && transform.scale.Length >= 2)
+                    scale = new Vector2(transform.scale[0], transform.scale[1]);
+                if (transform.offset != null && transform.offset.Length >= 2)
+                    offset = new Vector2(transform.offset[0], transform.offset[1]);
+                if (Mathf.Abs(transform.rotation) > 0.0001f)
+                    Debug.LogWarning("GLB texture rotation is not supported by Unity Standard: " + material.name);
+            }
+            // glTFast may load textures upside-down relative to Unity. Keep the
+            // material sampling consistent with the actual decoded texture.
+            if (gltf.IsTextureYFlipped(info.index))
+            {
+                scale.y = -scale.y;
+                offset.y = 1f - offset.y;
+            }
+            material.SetTextureScale(property, scale);
+            material.SetTextureOffset(property, offset);
+        }
+
+        private static void SetSurfaceMode(Material destination, int mode, float cutoff)
+        {
+            // Built-in Standard's alpha mode depends on render state AND keywords.
+            destination.SetFloat("_Mode", mode);
+            destination.SetInt("_SrcBlend", mode == 2 ? (int)BlendMode.SrcAlpha : (int)BlendMode.One);
+            destination.SetInt("_DstBlend", mode == 2 ? (int)BlendMode.OneMinusSrcAlpha : (int)BlendMode.Zero);
+            destination.SetInt("_ZWrite", mode == 2 ? 0 : 1);
+            destination.SetFloat("_Cutoff", Mathf.Clamp01(cutoff));
+            destination.DisableKeyword("_ALPHATEST_ON");
+            destination.DisableKeyword("_ALPHABLEND_ON");
+            destination.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            if (mode == 1) destination.EnableKeyword("_ALPHATEST_ON");
+            if (mode == 2) destination.EnableKeyword("_ALPHABLEND_ON");
+            destination.renderQueue = mode == 1 ? (int)RenderQueue.AlphaTest :
+                                      mode == 2 ? (int)RenderQueue.Transparent : -1;
+            destination.SetOverrideTag("RenderType", mode == 1 ? "TransparentCutout" : mode == 2 ? "Transparent" : "");
+        }
+
+        /// <summary>
+        /// Reads a GPU-only texture through a temporary RT, packs once, frees the CPU
+        /// source buffer, and makes the output non-readable to reduce iOS RAM usage.
+        /// </summary>
+        internal static Texture2D PackMap(Texture source, int kind, float metallic, float roughness)
+        {
+            int w = source.width;
+            int h = source.height;
+            RenderTexture rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
+            RenderTexture prior = RenderTexture.active;
+            Texture2D readback = null;
+            try
+            {
+                Graphics.Blit(source, rt);
+                RenderTexture.active = rt;
+                readback = new Texture2D(w, h, TextureFormat.RGBA32, true, true);
+                readback.ReadPixels(new Rect(0, 0, w, h), 0, 0, false);
+                readback.Apply(false, false);
+                var pixels = readback.GetPixelData<Color32>(0);
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    Color32 input = pixels[i];
+                    if (kind == 0 || kind == 3) // glTF metallic = B, roughness = G
+                    {
+                        byte m = (byte)Mathf.RoundToInt(input.b * metallic);
+                        byte s = (byte)Mathf.RoundToInt(255f - input.g * roughness);
+                        pixels[i] = new Color32(m, kind == 3 ? input.r : (byte)0, 0, s);
+                    }
+                    else if (kind == 1 || kind == 4) // spec-gloss alpha = glossiness
+                    {
+                        byte m = (byte)Mathf.RoundToInt(255f * metallic);
+                        byte s = (byte)Mathf.RoundToInt(input.a * roughness);
+                        pixels[i] = new Color32(m, kind == 4 ? input.r : (byte)0, 0, s);
+                    }
+                    else // glTF AO in R, Unity Standard expects G
+                    {
+                        pixels[i] = new Color32(255, input.r, 255, 255);
+                    }
+                }
+                readback.name = source.name + (kind == 2 ? "_AO_Standard" : "_MetallicSmoothness_Standard");
+                readback.wrapMode = source.wrapMode;
+                readback.filterMode = source.filterMode;
+                readback.anisoLevel = source.anisoLevel;
+                // GetPixelData writes directly into the texture's native CPU buffer.
+                // Avoid allocating a second managed Color32[] of width*height pixels.
+                readback.Apply(true, true); // CPU pixel copy discarded; GPU texture retained
+                Texture2D result = readback;
+                readback = null; // ownership transferred to caller
+                return result;
+            }
+            finally
+            {
+                RenderTexture.active = prior;
+                RenderTexture.ReleaseTemporary(rt);
+                if (readback != null) Object.Destroy(readback);
             }
         }
     }

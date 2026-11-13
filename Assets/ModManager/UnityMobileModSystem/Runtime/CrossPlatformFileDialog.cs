@@ -75,7 +75,7 @@ namespace MobileModSystem
 #if UNITY_ANDROID || UNITY_IOS
             try
             {
-                Action<string> mobileCallback = path => FinishPick(path, completed);
+                NativeFilePicker.FilePickedCallback mobileCallback = path => FinishPick(path, completed);
 
                 if (mobileFileTypes != null && mobileFileTypes.Length > 0)
                     NativeFilePicker.PickFile(mobileCallback, mobileFileTypes);
@@ -230,12 +230,54 @@ namespace MobileModSystem
             string[] extensions,
             Action<string> completed)
         {
+            // Custom .sdgmod extensions can be disabled/greyed out by native desktop
+            // dialogs when the OS doesn't know that file type. For mod packages, show
+            // All Files and validate the extension after the user chooses a file.
+            bool useAllFiles = IsSdgModFilter(extensions);
+            string[] dialogExtensions = useAllFiles
+                ? Array.Empty<string>()
+                : extensions;
+
+            Action<string> validatedCompleted = completed;
+
+            if (useAllFiles)
+            {
+                validatedCompleted = path =>
+                {
+                    if (string.IsNullOrWhiteSpace(path))
+                    {
+                        completed?.Invoke(null);
+                        return;
+                    }
+
+                    if (!HasAllowedExtension(path, extensions))
+                    {
+                        Debug.LogWarning(
+                            "[MobileMod] Selected file isn't an .sdgmod package: " + path);
+                        completed?.Invoke(null);
+                        return;
+                    }
+
+                    completed?.Invoke(path);
+                };
+            }
+
             // Prefer the maintained, architecture-independent uGUI browser.
-            if (TryOpenSimpleFileBrowser(title, filterName, extensions, completed))
+            if (TryOpenSimpleFileBrowser(
+                    title,
+                    filterName,
+                    dialogExtensions,
+                    validatedCompleted))
+            {
                 return true;
+            }
 
             // Fall back to the native SFB plugin when available.
-            return TryOpenSfbFilePanel(title, filterName, extensions, completed);
+            return TryOpenSfbFilePanel(
+                title,
+                filterName,
+                dialogExtensions,
+                validatedCompleted);
         }
 
         private static bool TryOpenDesktopSavePanel(
@@ -465,21 +507,26 @@ namespace MobileModSystem
                 .Select(extension => "." + extension)
                 .ToArray();
 
-            if (normalizedExtensions.Length == 0)
-                return;
-
             ConstructorInfo constructor = filterType.GetConstructor(
                 new[] { typeof(string), typeof(string[]) });
             if (constructor == null)
                 return;
 
-            Array filters = Array.CreateInstance(filterType, 1);
-            object filter = constructor.Invoke(new object[]
+            // An empty filter array + showAllFiles=true intentionally resets any
+            // previous audio/model filter and leaves only the All Files option.
+            Array filters = Array.CreateInstance(
+                filterType,
+                normalizedExtensions.Length > 0 ? 1 : 0);
+
+            if (normalizedExtensions.Length > 0)
             {
-                string.IsNullOrWhiteSpace(filterName) ? "Supported Files" : filterName,
-                normalizedExtensions
-            });
-            filters.SetValue(filter, 0);
+                object filter = constructor.Invoke(new object[]
+                {
+                    string.IsNullOrWhiteSpace(filterName) ? "Supported Files" : filterName,
+                    normalizedExtensions
+                });
+                filters.SetValue(filter, 0);
+            }
 
             MethodInfo setFilters = browserType
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)
@@ -629,8 +676,6 @@ namespace MobileModSystem
             string[] extensions)
         {
             string[] normalizedExtensions = NormalizeExtensions(extensions);
-            if (normalizedExtensions.Length == 0)
-                return null;
 
             ConstructorInfo constructor = filterType.GetConstructor(
                 new[] { typeof(string), typeof(string[]) });
@@ -641,11 +686,18 @@ namespace MobileModSystem
                     ".ctor(string, string[])");
 
             Array result = Array.CreateInstance(filterType, 1);
-            object filter = constructor.Invoke(new object[]
-            {
-                string.IsNullOrWhiteSpace(filterName) ? "Supported Files" : filterName,
-                normalizedExtensions
-            });
+
+            object filter = normalizedExtensions.Length == 0
+                ? constructor.Invoke(new object[]
+                {
+                    "All Files",
+                    new[] { "*" }
+                })
+                : constructor.Invoke(new object[]
+                {
+                    string.IsNullOrWhiteSpace(filterName) ? "Supported Files" : filterName,
+                    normalizedExtensions
+                });
 
             result.SetValue(filter, 0);
             return result;
@@ -778,6 +830,36 @@ namespace MobileModSystem
             return path.EndsWith(expectedExtension, StringComparison.OrdinalIgnoreCase)
                 ? path
                 : path + expectedExtension;
+        }
+
+        private static bool IsSdgModFilter(string[] extensions)
+        {
+            string[] normalized = NormalizeExtensions(extensions);
+            return normalized.Length == 1 &&
+                   string.Equals(
+                       normalized[0],
+                       "sdgmod",
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool HasAllowedExtension(
+            string path,
+            string[] extensions)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return false;
+
+            string selectedExtension = Path.GetExtension(path);
+            if (string.IsNullOrWhiteSpace(selectedExtension))
+                return false;
+
+            selectedExtension = selectedExtension.TrimStart('.');
+
+            return NormalizeExtensions(extensions).Any(extension =>
+                string.Equals(
+                    selectedExtension,
+                    extension,
+                    StringComparison.OrdinalIgnoreCase));
         }
 
         private static string GetInitialDirectory()

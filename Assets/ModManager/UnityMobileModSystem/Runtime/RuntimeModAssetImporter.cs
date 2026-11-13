@@ -23,6 +23,10 @@ namespace MobileModSystem
         [SerializeField]
         private bool repackOcclusionTexture = true;
 
+        [Tooltip("Releases the CPU copy of imported PNG/JPG textures after uploading to GPU (recommended for iOS). Turn off if other code calls GetPixels().")]
+        [SerializeField]
+        private bool makeImportedTexturesNonReadable = true;
+
         /// <summary>
         /// 공개 GLB Import API도 항상 parent 아래 모델을 하나만 유지합니다.
         /// 기존 모델이 있으면 자동으로 교체됩니다.
@@ -120,6 +124,12 @@ namespace MobileModSystem
                     copyIntoWorkspace);
             }
 
+            // 기존 모델 노드는 유지하고 내부 GLB만 새 모델로 교체합니다.
+            await LoadGlbIntoNodeAsync(
+                pickedFilePath,
+                targetRoot,
+                copyIntoWorkspace);
+
             // 선택된 최신 모델 외의 모든 모델을 제거합니다.
             foreach (RuntimeModelBinding binding in existingModels)
             {
@@ -141,11 +151,6 @@ namespace MobileModSystem
                 }
             }
 
-            // 기존 모델 노드는 유지하고 내부 GLB만 새 모델로 교체합니다.
-            await LoadGlbIntoNodeAsync(
-                pickedFilePath,
-                targetRoot,
-                copyIntoWorkspace);
 
             string newName = Path.GetFileNameWithoutExtension(pickedFilePath);
             if (!string.IsNullOrWhiteSpace(newName))
@@ -168,49 +173,57 @@ namespace MobileModSystem
                 ? ModPathUtility.CopyIntoWorkspace(sourcePath, "Models")
                 : sourcePath;
 
-            byte[] bytes = File.ReadAllBytes(storedPath);
-            GltfImport gltf = new GltfImport();
-
-            bool loaded = await gltf.LoadGltfBinary(bytes, ModPathUtility.ToFileUri(storedPath));
-            if (!loaded)
-                throw new InvalidDataException("glTFast가 GLB 모델을 읽지 못했습니다: " + storedPath);
-
-            // 새 모델을 먼저 임시 컨테이너에 완전히 생성한 뒤 기존 모델과 교체합니다.
-            // 새 GLB 로딩/생성 실패 시 기존 모델이 그대로 남도록 하기 위함입니다.
-            GameObject modelContainer = new GameObject("__Model_New");
-            modelContainer.transform.SetParent(node.transform, false);
-            modelContainer.SetActive(false);
-
-            bool instantiated = await gltf.InstantiateMainSceneAsync(modelContainer.transform);
-            if (!instantiated)
-            {
-                Destroy(modelContainer);
-                throw new InvalidDataException("GLB 모델의 씬 생성에 실패했습니다: " + storedPath);
-            }
-
+            // Direct material generation: NEVER instantiate glTF PBR shaders first.
+            Shader resolvedShader = null;
+            RuntimeStandardMaterialGenerator generator = null;
             if (convertImportedMaterialsToStandard)
             {
-                Shader resolvedStandardShader = standardShader != null
-                    ? standardShader
-                    : Shader.Find("Standard");
-
-                if (resolvedStandardShader == null)
-                {
-                    Destroy(modelContainer);
-                    throw new InvalidOperationException(
-                        "Unity Standard shader was not found. Assign it to RuntimeModAssetImporter.standardShader " +
-                        "or add Standard to Graphics > Always Included Shaders.");
-                }
-
-                int convertedMaterialCount = RuntimeStandardMaterialConverter.ConvertHierarchy(
-                    modelContainer,
-                    resolvedStandardShader,
+                resolvedShader = standardShader != null ? standardShader : Shader.Find("Standard");
+                RuntimeStandardMaterialConverter.ValidateShader(resolvedShader);
+                generator = new RuntimeStandardMaterialGenerator(
+                    resolvedShader,
                     repackMetallicRoughnessTexture,
                     repackOcclusionTexture);
+            }
 
-                Debug.Log(
-                    $"Converted {convertedMaterialCount} imported glTF materials to Standard on {node.name}.",
-                    node);
+            GltfImport gltf = null;
+            GameObject modelContainer = null;
+            RuntimeGltfModelLifetime lifetime = null;
+            try
+            {
+                gltf = new GltfImport(materialGenerator: generator);
+                byte[] bytes = File.ReadAllBytes(storedPath);
+                bool loaded = await gltf.LoadGltfBinary(bytes, ModPathUtility.ToFileUri(storedPath));
+                bytes = null;
+                if (!loaded)
+                    throw new InvalidDataException("glTFast could not load GLB: " + storedPath);
+
+                // Build the new model in an inactive container, retaining the old
+                // one until the entire load succeeds.
+                modelContainer = new GameObject("__Model_New");
+                modelContainer.transform.SetParent(node.transform, false);
+                modelContainer.SetActive(false);
+                lifetime = modelContainer.AddComponent<RuntimeGltfModelLifetime>();
+                lifetime.TakeOwnership(gltf, generator);
+
+                bool instantiated = await gltf.InstantiateMainSceneAsync(modelContainer.transform);
+                if (!instantiated)
+                    throw new InvalidDataException("GLB scene instantiation failed: " + storedPath);
+
+                if (generator != null)
+                    Debug.Log("Imported GLB directly as Unity Standard materials: " + node.name, node);
+            }
+            catch
+            {
+                if (lifetime != null)
+                    lifetime.Release();
+                else
+                {
+                    if (gltf != null) gltf.Dispose();
+                    if (generator != null) generator.Dispose();
+                }
+                if (modelContainer != null) Destroy(modelContainer);
+                throw;
             }
 
             // 여기까지 성공했을 때만 기존 GLB 컨테이너와 오래된 텍스처 바인딩을 제거합니다.
@@ -288,6 +301,10 @@ namespace MobileModSystem
                 if (textureBinding != null)
                     Destroy(textureBinding);
             }
+            // Generated runtime textures don't disappear just because a material
+            // or RuntimeTextureBinding is destroyed. Release the owned textures too.
+            foreach (var owner in node.GetComponents<RuntimeImportedTextureLifetime>())
+                if (owner != null) Destroy(owner);
         }
 
         public async Task<Texture2D> ImportTextureAsync(
@@ -315,7 +332,7 @@ namespace MobileModSystem
             Texture2D texture = new Texture2D(2, 2, TextureFormat.RGBA32, true);
             texture.name = Path.GetFileNameWithoutExtension(storedPath);
 
-            if (!ImageConversion.LoadImage(texture, bytes, false))
+            if (!ImageConversion.LoadImage(texture, bytes, makeImportedTexturesNonReadable))
             {
                 Destroy(texture);
                 throw new InvalidDataException("텍스처를 읽지 못했습니다: " + storedPath);
@@ -324,6 +341,8 @@ namespace MobileModSystem
             ApplyTexture(targetRenderer, texture, propertyName, materialIndex);
 
             RuntimeTextureBinding binding = ownerNode.AddComponent<RuntimeTextureBinding>();
+            var textureOwner = ownerNode.AddComponent<RuntimeImportedTextureLifetime>();
+            textureOwner.Texture = texture;
             binding.sourceFilePath = storedPath;
             binding.targetRenderer = targetRenderer;
             binding.materialIndex = materialIndex;

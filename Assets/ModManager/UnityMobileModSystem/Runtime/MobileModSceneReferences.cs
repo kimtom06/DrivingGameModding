@@ -9,6 +9,8 @@ namespace MobileModSystem
     [DisallowMultipleComponent]
     public sealed class MobileModSceneReferences : MonoBehaviour
     {
+
+
         [Header("Scene References")]
         [Tooltip("임포트한 모드가 생성될 부모입니다. 비워두면 이 컴포넌트가 붙은 Transform을 사용합니다.")]
         public Transform importedModsParent;
@@ -18,7 +20,6 @@ namespace MobileModSystem
 
         [Tooltip("기존 모드를 편집용으로 열 때 생성할 부모입니다. 비워두면 buildRoot, buildRoot도 없으면 이 Transform을 사용합니다.")]
         public Transform editWorkspaceParent;
-
         public Transform ResolveImportedModsParent()
         {
             return importedModsParent != null
