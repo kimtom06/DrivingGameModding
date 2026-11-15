@@ -197,6 +197,10 @@ City bus folding door - right panel : BusDoor_FoldRight
 City bus folding door - left panel : BusDoor_FoldLeft
 (The folding door must consist of two separate objects for automatic assignment. Set the pivot of each door panel to its far-right edge. When both doors are closed, their rotation must be 0,0,0.)
 
+City bus in-folding door - right panel: BusDoor_InFoldRight
+City bus in-folding door - left panel: BusDoor_InFoldLeft
+(The pivot for each door must be placed at the axis around which the door rotates; for example, the pivot for the right-hand panel should be positioned at its rightmost edge.)
+
 City bus sliding door : BusDoor_Slide
 
 

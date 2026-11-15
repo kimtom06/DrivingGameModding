@@ -19402,9 +19402,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   controller: {fileID: 1605259214}
-  inputField: {fileID: 0}
+  inputField: {fileID: 1923301071}
   forceMultiline: 1
   alignTopLeft: 1
+  maxUndoSteps: 100
 --- !u!1 &1923301070
 GameObject:
   m_ObjectHideFlags: 0
