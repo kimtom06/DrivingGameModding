@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using MobileModSystem;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using UnityEngine.SceneManagement;
 using System.Security.Cryptography;
 using System.Text;
@@ -32,6 +33,14 @@ public class ModLoader : MonoBehaviour
 
     public RCC_DashboardObjects rCC_DashboardObjects;
 
+    [Header("Digital Dashboard TMP")]
+    public TMP_Text SpeedText;
+    public TMP_Text RPMText;
+
+    private const float DashboardTextBaseScale = 0.003f;
+    private int lastSpeedTextValue = int.MinValue;
+    private int lastRPMTextValue = int.MinValue;
+
     public RCC_LightEmission Head;
     public RCC_LightEmission Left;
     public RCC_LightEmission Right;
@@ -51,11 +60,54 @@ public class ModLoader : MonoBehaviour
 
     private RCC_CarControllerV3 car;
 
+    // 모드 로드 시에만 검색 및 설정 파싱. 매 프레임에는 회전만 적용합니다.
+    private DashboardNeedle speedNeedle;
+    private DashboardNeedle rpmNeedle;
+
+    private struct DashboardNeedle
+    {
+        public Transform target;
+        public Quaternion zeroRotation;
+        public Vector3 axis;
+        public float anglePerUnit;
+
+        public void Apply(float value)
+        {
+            if (!target || float.IsNaN(value) || float.IsInfinity(value))
+                return;
+
+            float angle = value * anglePerUnit;
+            if (float.IsNaN(angle) || float.IsInfinity(angle))
+                return;
+
+            target.localRotation = zeroRotation *
+                Quaternion.AngleAxis(angle, axis);
+        }
+
+        public void Reset()
+        {
+            // 같은 모델을 다시 추출할 때 현재 각도가 새 0점이 되지 않도록 복원.
+            if (target)
+                target.localRotation = zeroRotation;
+
+            this = default;
+        }
+    }
+
     public CarCustomizerComp cus;
 
     [HideInInspector]
     public string RecentModString = "last_loaded.sdgmod";
 
+
+    private void Awake()
+    {
+        // 모드가 로드되기 전에는 디지털 계기판을 숨깁니다.
+        if (SpeedText)
+            SpeedText.gameObject.SetActive(false);
+        if (RPMText)
+            RPMText.gameObject.SetActive(false);
+    }
 
     private void Start()
     {
@@ -256,6 +308,162 @@ public class ModLoader : MonoBehaviour
     }
 
 
+    private void LateUpdate()
+    {
+        if (car == null)
+            return;
+
+        UpdateDashboardNeedles();
+        UpdateDashboardTexts();
+    }
+
+    private void InitializeDashboardTexts()
+    {
+        lastSpeedTextValue = int.MinValue;
+        lastRPMTextValue = int.MinValue;
+
+        ConfigureDashboardText(SpeedText, ex != null ? ex.SpeedTextPos : null);
+        ConfigureDashboardText(RPMText, ex != null ? ex.RPMTextPos : null);
+
+        if (car != null)
+            UpdateDashboardTexts();
+    }
+
+    private static void ConfigureDashboardText(TMP_Text text, GameObject marker)
+    {
+        if (!text)
+            return;
+
+        if (!marker)
+        {
+            text.gameObject.SetActive(false);
+            return;
+        }
+
+        Transform target = text.transform;
+        Transform source = marker.transform;
+
+        // Keep the original TMP parent so it survives imported model replacement.
+        target.SetPositionAndRotation(source.position, source.rotation);
+
+        // Base scale is always 0.003, never the previously applied TMP scale.
+        // Compensate for the TMP parent's scale along the text's local axes.
+        Vector3 scale = source.lossyScale * DashboardTextBaseScale;
+        Transform parent = target.parent;
+        if (parent != null)
+        {
+            Quaternion localRotation = target.localRotation;
+            scale.x = DivideDashboardScale(scale.x,
+                parent.TransformVector(localRotation * Vector3.right).magnitude);
+            scale.y = DivideDashboardScale(scale.y,
+                parent.TransformVector(localRotation * Vector3.up).magnitude);
+            scale.z = DivideDashboardScale(scale.z,
+                parent.TransformVector(localRotation * Vector3.forward).magnitude);
+        }
+
+        target.localScale = scale;
+        text.gameObject.SetActive(true);
+    }
+
+    private static float DivideDashboardScale(float value, float parentScale)
+    {
+        return parentScale > 0.000001f ? value / parentScale : 0f;
+    }
+
+    private void UpdateDashboardTexts()
+    {
+        UpdateDashboardText(SpeedText, Mathf.Abs(car.speed), ref lastSpeedTextValue);
+        UpdateDashboardText(RPMText, Mathf.Max(0f, car.engineRPM), ref lastRPMTextValue);
+    }
+
+    private static void UpdateDashboardText(TMP_Text text, float value, ref int lastValue)
+    {
+        if (!text || !text.gameObject.activeSelf ||
+            float.IsNaN(value) || float.IsInfinity(value))
+            return;
+
+        int rounded = Mathf.RoundToInt(value);
+        if (rounded == lastValue)
+            return;
+
+        lastValue = rounded;
+        // TMP numeric formatting avoids creating a new string each frame.
+        text.SetText("{0:0}", (float)rounded);
+    }
+
+    private void UpdateDashboardNeedles()
+    {
+        // RCC의 speed는 km/h, engineRPM은 rpm 단위입니다.
+        // 후진 시에도 속도계는 양수 속력을 표시합니다.
+        speedNeedle.Apply(Mathf.Abs(car.speed));
+        rpmNeedle.Apply(Mathf.Max(0f, car.engineRPM));
+    }
+
+    private void InitializeDashboardNeedles()
+    {
+        speedNeedle.Reset();
+        rpmNeedle.Reset();
+
+        if (ex == null || ex.rt == null)
+            return;
+
+        speedNeedle = CreateDashboardNeedle(
+            ex.Needle_Speed,
+            "car.dash.speedometerAngle100",
+            "car.dash.speedometerAxis",
+            170f,
+            100f
+        );
+
+        // 설정 키의 이름은 RPMAngle100이지만, 기준 RPM은 1000입니다.
+        rpmNeedle = CreateDashboardNeedle(
+            ex.Needle_RPM,
+            "car.dash.RPMAngle100",
+            "car.dash.RPMAxis",
+            30f,
+            1000f
+        );
+
+        if (car != null)
+            UpdateDashboardNeedles();
+    }
+
+    private DashboardNeedle CreateDashboardNeedle(
+        GameObject needle,
+        string angleKey,
+        string axisKey,
+        float defaultAngle,
+        float referenceValue)
+    {
+        if (!needle)
+            return default;
+
+        float angle;
+        if (!ex.rt.TryGetFloat(angleKey, out angle) ||
+            float.IsNaN(angle) || float.IsInfinity(angle))
+        {
+            angle = defaultAngle;
+        }
+
+        Vector3 axis;
+        if (!ex.rt.TryGetVector3(axisKey, out axis) ||
+            float.IsNaN(axis.sqrMagnitude) ||
+            float.IsInfinity(axis.sqrMagnitude) ||
+            axis.sqrMagnitude < 0.000001f)
+        {
+            axis = Vector3.up;
+        }
+
+        return new DashboardNeedle
+        {
+            target = needle.transform,
+            zeroRotation = needle.transform.localRotation,
+            axis = axis.normalized,
+            anglePerUnit = angle / referenceValue
+        };
+    }
+
+
     // ================================================================
     // Mod 추출 완료 후 호출
     // ================================================================
@@ -268,6 +476,9 @@ public class ModLoader : MonoBehaviour
         if (cus == null)
             cus = GetComponent<CarCustomizerComp>();
 
+
+        InitializeDashboardNeedles();
+        InitializeDashboardTexts();
 
         // ============================================================
         // MOD NAME / AUTHOR

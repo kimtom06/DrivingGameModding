@@ -50,6 +50,14 @@ public class ExtractElements : MonoBehaviour
     [Header("핸들")]
     public GameObject SteeringWheel;
 
+    [Header("계기판 바늘")]
+    public GameObject Needle_Speed;
+    public GameObject Needle_RPM;
+
+    [Header("계기판 디지털 텍스트 위치")]
+    public GameObject SpeedTextPos;
+    public GameObject RPMTextPos;
+
     [Header("오브젝트 스폰, 이동 위치들")]
     public GameObject MirrorRight;
     public GameObject MirrorLeft;
@@ -269,7 +277,11 @@ public class ExtractElements : MonoBehaviour
             $"Door Right: {GetObjectName(Door_Right)}\n" +
             $"Door Fold: {GetObjectName(Door_Fold)}\n" +
             $"Door Slide: {GetObjectName(Door_Slide)}\n" +
-            $"Trunk: {GetObjectName(Trunk)}",
+            $"Trunk: {GetObjectName(Trunk)}\n" +
+            $"Speed Needle: {GetObjectName(Needle_Speed)}\n" +
+            $"RPM Needle: {GetObjectName(Needle_RPM)}\n" +
+            $"Speed Text Position: {GetObjectName(SpeedTextPos)}\n" +
+            $"RPM Text Position: {GetObjectName(RPMTextPos)}",
             this
         );
 
@@ -821,6 +833,10 @@ public class ExtractElements : MonoBehaviour
         WheelCollider_RL = null;
 
         SteeringWheel = null;
+        Needle_Speed = null;
+        Needle_RPM = null;
+        SpeedTextPos = null;
+        RPMTextPos = null;
 
         MirrorRight = null;
         MirrorLeft = null;
@@ -884,6 +900,32 @@ public class ExtractElements : MonoBehaviour
         }
 
         string objectName = target.name;
+
+        // 계기판 바늘: 정확한 이름 우선 검색 (부분 이름은 사용하지 않음).
+        if (Needle_Speed == null &&
+            MatchesAnyObjectName(objectName, "Needle_Speed"))
+        {
+            Needle_Speed = target.gameObject;
+        }
+
+        if (Needle_RPM == null &&
+            MatchesAnyObjectName(objectName, "Needle_RPM"))
+        {
+            Needle_RPM = target.gameObject;
+        }
+
+        // 디지털 계기판 위치: 정확한 이름만 검색합니다.
+        if (SpeedTextPos == null &&
+            MatchesAnyObjectName(objectName, "SpeedTextPos"))
+        {
+            SpeedTextPos = target.gameObject;
+        }
+
+        if (RPMTextPos == null &&
+            MatchesAnyObjectName(objectName, "RPMTextPos"))
+        {
+            RPMTextPos = target.gameObject;
+        }
 
         // 무게중심
         if (COM == null &&

@@ -56,3 +56,15 @@ car.camera.distance = 0
 #승용차 : 0.5, 8
 #트럭, 버스 : 0.7, 12
 
+#속도 바늘의 게임 오브젝트의 이름은 Needle_Speed로 해주세요.
+#속도가 시속 100KM일때 계기판 속도 바늘의 각도입니다.
+car.dash.speedometerAngle100 = 170
+#계기판 속도 바늘의 회전축입니다.
+car.dash.speedometerAxis = 0,1,0 
+
+
+#RPM 바늘의 게임 오브젝트의 이름은 Needle_RPM으로 해주세요.
+#RPM이 1000일때 계기판 RPM 바늘의 각도입니다.
+car.dash.RPMAngle100 = 30
+#계기판 속도 바늘의 회전축입니다.
+car.dash.RPMAxis = 0,1,0 

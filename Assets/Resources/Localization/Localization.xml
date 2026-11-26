@@ -110,6 +110,17 @@
 번호판 위치 : NumberPlate
 (번호판은 NumberPlate 1, NumberPlate 2 형식으로 2개까지 추가 가능합니다. 각도를 변경하시면 번호판의 방향도 바뀝니다.)
 
+속도계 바늘 : Needle_Speed
+(차량의 현재 속도에 따라 바늘이 회전합니다. 설정 파일에서 시속 100km/h일 때의 회전 각도와 회전축을 지정할 수 있습니다. 바늘의 원점은 실제 회전 중심에 위치해야 하며, 초기 방향은 0km/h를 가리켜야 합니다.)
+
+RPM 바늘 : Needle_RPM
+(차량의 현재 엔진 RPM에 따라 바늘이 회전합니다. 설정 파일에서 1000RPM일 때의 회전 각도와 회전축을 지정할 수 있습니다. 바늘의 원점은 실제 회전 중심에 위치해야 하며, 초기 방향은 0RPM을 가리켜야 합니다.)
+
+디지털 속도계 위치 : SpeedTextPos
+(차량의 현재 속도를 숫자로 표시합니다. 오브젝트의 위치와 각도를 변경하시면 숫자가 표시되는 위치와 방향도 바뀝니다. 오브젝트의 크기를 변경하여 글자의 크기를 조절할 수 있습니다. 해당 오브젝트가 없으면 디지털 속도계는 표시되지 않습니다.)
+
+디지털 RPM 계기판 위치 : RPMTextPos
+(차량의 현재 엔진 RPM을 숫자로 표시합니다. 오브젝트의 위치와 각도를 변경하시면 숫자가 표시되는 위치와 방향도 바뀝니다. 오브젝트의 크기를 변경하여 글자의 크기를 조절할 수 있습니다. 해당 오브젝트가 없으면 디지털 RPM 계기판은 표시되지 않습니다.)
 
 
 =================================
@@ -210,7 +221,19 @@ Exhaust position : Exhaust
 License plate position : NumberPlate
 (Up to two license plates can be added using names such as NumberPlate 1 and NumberPlate 2. Changing the object's rotation will also change the direction of the license plate.)
 
+Dashboard Instruments
 
+Speedometer needle: Needle_Speed
+(The needle rotates according to the vehicle's current speed. You can specify the rotation angle at 100 km/h and the rotation axis in the configuration file. The object's pivot must be located at the actual rotation center of the needle, and its initial orientation must point to 0 km/h.)
+
+RPM gauge needle: Needle_RPM
+(The needle rotates according to the vehicle's current engine RPM. You can specify the rotation angle at 1,000 RPM and the rotation axis in the configuration file. The object's pivot must be located at the actual rotation center of the needle, and its initial orientation must point to 0 RPM.)
+
+Digital speedometer position: SpeedTextPos
+(Displays the vehicle's current speed as a numerical value. Changing the object's position and rotation changes the position and orientation of the displayed text. You can adjust the text size by scaling the object. If this object is missing, the digital speedometer will not be displayed.)
+
+Digital RPM display position: RPMTextPos
+(Displays the vehicle's current engine RPM as a numerical value. Changing the object's position and rotation changes the position and orientation of the displayed text. You can adjust the text size by scaling the object. If this object is missing, the digital RPM display will not be displayed.)
 
 =================================
 For additional questions or bug reports, please contact 3ddrivinggame@gmail.com.</en>
